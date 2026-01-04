@@ -6,8 +6,27 @@ Prevents duplicate file imports and maintains import logs.
 import sqlite3
 import hashlib
 import logging
+import streamlit as st
 from datetime import datetime
 from typing import Optional, List, Dict
+
+# Import Supabase operations
+from database.import_history_supabase import (
+    check_file_already_imported_supabase,
+    record_file_import_supabase,
+    get_import_history_supabase,
+    get_import_stats_supabase,
+    clear_import_history_supabase
+)
+
+# Reuse the helper from transaction_operations or define it here
+def should_use_supabase() -> bool:
+    try:
+        if "supabase" in st.secrets and st.session_state.get('authentication_status'):
+            return True
+    except (FileNotFoundError, AttributeError):
+        pass
+    return False
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +48,9 @@ def check_file_already_imported(conn: sqlite3.Connection, filename: str, file_ha
     Returns:
         bool: True if file was already imported
     """
+    if should_use_supabase():
+        return check_file_already_imported_supabase(filename, file_hash)
+
     try:
         c = conn.cursor()
         c.execute("""
@@ -60,6 +82,9 @@ def record_file_import(
     Returns:
         bool: True if recorded successfully
     """
+    if should_use_supabase():
+        return record_file_import_supabase(filename, file_hash, transactions_imported)
+
     try:
         c = conn.cursor()
         c.execute("""
@@ -85,6 +110,9 @@ def get_import_history(conn: sqlite3.Connection, limit: int = 10) -> List[Dict]:
     Returns:
         List of import history dictionaries
     """
+    if should_use_supabase():
+        return get_import_history_supabase(limit)
+
     try:
         c = conn.cursor()
         c.execute("""
@@ -115,6 +143,9 @@ def get_import_stats(conn: sqlite3.Connection) -> Dict:
     Returns:
         Dictionary with import stats
     """
+    if should_use_supabase():
+        return get_import_stats_supabase()
+
     try:
         c = conn.cursor()
         
@@ -154,6 +185,9 @@ def clear_import_history(conn: sqlite3.Connection) -> bool:
     Returns:
         bool: True if cleared successfully
     """
+    if should_use_supabase():
+        return clear_import_history_supabase()
+
     try:
         c = conn.cursor()
         c.execute("DELETE FROM import_history")

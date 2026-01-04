@@ -14,9 +14,13 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 
+# Authentication
+from auth.auth_handler import handle_authentication, load_auth_config, create_authenticator
+
 # Database initialization
 from database.db_manager import init_users_db, init_db
 from database.transaction_operations import get_transactions
+from database.supabase_client import get_user_id
 
 # UI components
 from ui.sidebar import render_sidebar
@@ -100,8 +104,23 @@ def render_active_tab(conn: sqlite3.Connection, all_transactions: pd.DataFrame):
 
 def main():
     """Main application entry point."""
-    # Initialize app configuration and users DB
+    # Initialize app configuration
     initialize_app()
+    
+    # Handle authentication FIRST
+    name, authentication_status, username, authenticator = handle_authentication()
+    
+    # Stop if not authenticated
+    if not authentication_status:
+        st.stop()
+    
+    # Show logout in sidebar
+    authenticator.logout('Logout', 'sidebar')
+    
+    # Welcome message
+    st.sidebar.success(f'Welcome **{name}**!')
+    
+    # Continue with app (now using Supabase for authenticated user)
     
     # Get query parameters for persistence across refreshes
     query_params = st.query_params

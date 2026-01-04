@@ -8,6 +8,24 @@ import logging
 import streamlit as st
 import pandas as pd
 
+# Import Supabase operations
+from database.budget_operations_supabase import (
+    get_budgets_supabase,
+    save_budget_supabase,
+    load_merchant_rules_supabase,
+    save_merchant_rule_supabase
+)
+
+# Reuse the helper from transaction_operations or define it here
+# Defining it here to avoid circular imports if transaction_operations imports this
+def should_use_supabase() -> bool:
+    try:
+        if "supabase" in st.secrets and st.session_state.get('authentication_status'):
+            return True
+    except (FileNotFoundError, AttributeError):
+        pass
+    return False
+
 logger = logging.getLogger(__name__)
 
 # Cache TTL in seconds (5 minutes)
@@ -25,6 +43,9 @@ def get_budgets(_conn):
     Returns:
         dict: Dictionary mapping category to budget amount
     """
+    if should_use_supabase():
+        return get_budgets_supabase()
+
     try:
         df = pd.read_sql("SELECT * FROM budgets", _conn)
         budgets = {}
@@ -48,6 +69,9 @@ def save_budget(conn, category, amount):
     Returns:
         bool: True if saved successfully
     """
+    if should_use_supabase():
+        return save_budget_supabase(category, amount)
+
     try:
         c = conn.cursor()
         c.execute("""
@@ -74,6 +98,9 @@ def load_merchant_rules(_conn):
     Returns:
         dict: Dictionary mapping merchant pattern to category
     """
+    if should_use_supabase():
+        return load_merchant_rules_supabase()
+
     try:
         df = pd.read_sql("SELECT * FROM merchant_rules", _conn)
         rules = {}
@@ -97,6 +124,9 @@ def save_merchant_rule(conn, merchant, category):
     Returns:
         bool: True if saved successfully
     """
+    if should_use_supabase():
+        return save_merchant_rule_supabase(merchant, category)
+
     try:
         c = conn.cursor()
         c.execute("""

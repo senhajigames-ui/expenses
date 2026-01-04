@@ -1,0 +1,33 @@
+# Secrets (NEVER commit these)
+auth_config.yaml
+.streamlit/secrets.toml
+
+# Local databases
+*.db
+*_expenses.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Migration scripts (optional - remove if you want to keep)
+scripts/migrate_data.py

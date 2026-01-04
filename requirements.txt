@@ -3,3 +3,8 @@ pandas
 plotly
 python-dateutil
 streamlit-aggrid
+streamlit-authenticator
+PyYAML
+supabase
+bcrypt
+toml
