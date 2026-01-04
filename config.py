@@ -5,9 +5,6 @@ Contains all constants, categories, and patterns used throughout the app.
 
 import os
 
-# AI Model Configuration
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
-
 # Database Configuration
 USERS_DB = "users.db"
 

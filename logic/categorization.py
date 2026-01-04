@@ -15,64 +15,12 @@ import logging
 import time
 from typing import Tuple, List, Dict, Optional
 from config import (
-    MODEL_NAME, WS_TICKERS, MERCHANT_PATTERNS, 
+    WS_TICKERS, MERCHANT_PATTERNS, 
     EXPENSE_CATEGORIES, INCOME_CATEGORIES, 
     TRANSFER_CATEGORIES, PAYMENT_CATEGORIES
 )
 
-# Try to import Ollama - optional for cloud deployment
-try:
-    import ollama
-    OLLAMA_INSTALLED = True
-except ImportError:
-    OLLAMA_INSTALLED = False
-    ollama = None
-
 logger = logging.getLogger(__name__)
-
-# Ollama availability cache
-_ollama_available: Optional[bool] = None
-_ollama_check_time: float = 0
-OLLAMA_CHECK_INTERVAL = 60  # Re-check every 60 seconds
-
-
-def is_ollama_available() -> bool:
-    """
-    Check if Ollama service is available.
-    Results are cached for OLLAMA_CHECK_INTERVAL seconds.
-    
-    Returns:
-        bool: True if Ollama is reachable and has the required model
-    """
-    global _ollama_available, _ollama_check_time
-    
-    # If Ollama isn't installed, always return False
-    if not OLLAMA_INSTALLED:
-        return False
-    
-    # Return cached result if still valid
-    if _ollama_available is not None and (time.time() - _ollama_check_time) < OLLAMA_CHECK_INTERVAL:
-        return _ollama_available
-    
-    try:
-        # Try to list models - this confirms Ollama is running
-        models = ollama.list()
-        model_names = [m.get('name', '') for m in models.get('models', [])]
-        
-        # Check if our required model is available
-        _ollama_available = any(MODEL_NAME in name for name in model_names)
-        
-        if not _ollama_available:
-            logger.warning(f"Ollama is running but model '{MODEL_NAME}' not found. Available: {model_names}")
-        else:
-            logger.info(f"Ollama available with model '{MODEL_NAME}'")
-            
-    except Exception as e:
-        logger.warning(f"Ollama not available: {e}")
-        _ollama_available = False
-    
-    _ollama_check_time = time.time()
-    return _ollama_available
 
 
 class CategorizationEngine:
@@ -257,46 +205,11 @@ class CategorizationEngine:
     
     def _ai_categorize(self, description: str, amount: float) -> str:
         """
-        Use AI to categorize transaction.
-        Falls back to 'Other' if Ollama is unavailable.
+        AI Fallback removed. 
+        Returns 'Other' to allow manual categorization.
         """
-        # Check Ollama availability first
-        if not is_ollama_available():
-            logger.info(f"Ollama unavailable - using fallback for: {description[:30]}...")
-            return "Other"
-        
-        try:
-            prompt = f"""Categorize this transaction. Return ONLY the category name.
-
-Categories: {', '.join(EXPENSE_CATEGORIES)}
-
-Transaction:
-- Description: {description}
-- Amount: ${amount}
-
-Category:"""
-            
-            response = ollama.generate(
-                model=MODEL_NAME,
-                prompt=prompt,
-                options={"temperature": 0.1}
-            )
-            
-            category = response['response'].strip()
-            
-            # Validate category
-            all_categories = (
-                EXPENSE_CATEGORIES + 
-                INCOME_CATEGORIES + 
-                TRANSFER_CATEGORIES + 
-                PAYMENT_CATEGORIES
-            )
-            
-            return category if category in all_categories else "Other"
-        
-        except Exception as e:
-            logger.warning(f"AI categorization failed: {e}")
-            return "Other"
+        # AI Logic decommissioning
+        return "Other"
     
     
     def _get_transaction_type(self, category: str) -> str:
@@ -423,10 +336,10 @@ def auto_create_rule(conn, description: str, category: str) -> Tuple[bool, Optio
     """Legacy function for backwards compatibility."""
     return RuleManager.create_rule(conn, description, category)
 
+
 def batch_categorize_transactions(transactions, custom_rules):
     """
-    Efficiently batch categorize transactions using parallel processing.
-    Uses ThreadPoolExecutor to handle multiple Ollama requests concurrently.
+    Efficiently batch categorize transactions.
     
     Args:
         transactions: list of dicts with 'description', 'amount', etc.
@@ -435,74 +348,19 @@ def batch_categorize_transactions(transactions, custom_rules):
     Returns:
         list of tuples (category, transaction_type)
     """
-    import concurrent.futures
-    
-    # Pre-calculate non-AI categories first (fast)
     results = [None] * len(transactions)
-    ai_indices = []
     
-    # Step 1: Try rules and patterns first
+    # Process sequentially (Simple loop, no threading overhead)
     for i, txn in enumerate(transactions):
         desc = txn['description']
         amount = txn['amount']
         is_neg = txn.get('is_negative', False)
         txn_code = txn.get('transaction_code', '')
         
-        # We need to access the engine's logic without triggering AI
-        # So we create a temporary engine instance
+        # Categorize
         engine = CategorizationEngine(custom_rules)
+        res = engine.categorize(desc, amount, is_neg, txn_code)
         
-        # Check priorities 1-4 (Rules, Patterns, Tickers)
-        # We manually call internal methods to avoid triggering AI
-        desc_upper = desc.upper()
-        
-        # 1. Account Rules
-        res = engine._check_account_rules(desc_upper, amount, txn_code)
-        if res:
-            results[i] = res
-            continue
-            
-        # 2. Custom Rules
-        res = engine._check_custom_rules(desc)
-        if res:
-            results[i] = res
-            continue
-            
-        # 3. Merchant Patterns
-        res = engine._check_merchant_patterns(desc_upper)
-        if res:
-            results[i] = res
-            continue
-            
-        # 4. WealthSimple Tickers
-        res = engine._check_ws_tickers(desc_upper)
-        if res:
-            results[i] = res
-            continue
-            
-        # If no match, mark for AI processing
-        ai_indices.append(i)
-    
-    # Step 2: Process remaining with AI in parallel
-    if ai_indices:
-        logger.info(f"Processing {len(ai_indices)} transactions with AI...")
-        
-        def process_single_ai(idx):
-            txn = transactions[idx]
-            engine = CategorizationEngine(custom_rules)
-            cat = engine._ai_categorize(txn['description'], txn['amount'])
-            return idx, (cat, engine._get_transaction_type(cat))
-        
-        # Use ThreadPoolExecutor for parallel API calls
-        # Limit max_workers to avoid overwhelming local Ollama instance
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-            future_to_idx = {
-                executor.submit(process_single_ai, idx): idx 
-                for idx in ai_indices
-            }
-            
-            for future in concurrent.futures.as_completed(future_to_idx):
-                idx, result = future.result()
-                results[idx] = result
+        results[i] = res
                 
     return results
