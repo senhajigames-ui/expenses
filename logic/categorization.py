@@ -186,8 +186,15 @@ class CategorizationEngine:
     
     
     def _check_merchant_patterns(self, desc_upper: str) -> Optional[Tuple[str, str]]:
-        """Check predefined merchant patterns."""
-        for pattern, category in MERCHANT_PATTERNS.items():
+        """
+        Check predefined merchant patterns.
+        Sorts patterns by length (descending) to match specific rules first.
+        Example: Matches 'UBER EATS' (Dining) before 'UBER' (Transport).
+        """
+        # Sort patterns by length descending to prioritize specific matches
+        sorted_patterns = sorted(MERCHANT_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
+        
+        for pattern, category in sorted_patterns:
             if pattern.upper() in desc_upper:
                 return category, self._get_transaction_type(category)
         

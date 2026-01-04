@@ -69,7 +69,9 @@ MERCHANT_PATTERNS = {
     "FARM BOY": "Groceries",
     "WHOLE FOODS": "Groceries",
     "INSTACART": "Groceries",
-    "COSTCO": "Groceries",
+    "COSTCO WHOLESALE": "Groceries",  # Specific
+    "COSTCO": "Groceries",            # Fallback
+    "WALMART SUPERCENTRE": "Groceries",
     "WALMART": "Groceries",
     
     # Dining / Fast Food
@@ -83,7 +85,7 @@ MERCHANT_PATTERNS = {
     "POPEYES": "Dining/Restaurants",
     "DOMINO": "Dining/Restaurants",
     "PIZZA": "Dining/Restaurants",
-    "UBER EATS": "Dining/Restaurants",
+    "UBER EATS": "Dining/Restaurants",  # Now correctly prioritized over UBER
     "SKIPTHEDISHES": "Dining/Restaurants",
     "DOORDASH": "Dining/Restaurants",
     "CHIPOTLE": "Dining/Restaurants",
@@ -91,7 +93,8 @@ MERCHANT_PATTERNS = {
     "CACTUS CLUB": "Dining/Restaurants",
     
     # Transportation
-    "UBER": "Transportation",
+    "UBER TRIP": "Transportation",      # Specific
+    "UBER": "Transportation",           # Fallback
     "LYFT": "Transportation",
     "PRESTO": "Transportation",
     "GO TRANSIT": "Transportation",
@@ -107,10 +110,14 @@ MERCHANT_PATTERNS = {
     "PETRO": "Gas/Fuel",
     "CANADIAN TIRE GAS": "Gas/Fuel",
     "MOBIL": "Gas/Fuel",
+    "COSTCO GAS": "Gas/Fuel",           # Specific
     
     # Shopping / Retail
-    "AMAZON": "Shopping/Retail",
-    "APPLE": "Shopping/Retail",
+    "AMAZON PRIME": "Subscriptions",    # Specific (was Shopping)
+    "AMAZON WEB SERVICES": "Fees",      # Specific (was Shopping)
+    "AMAZON": "Shopping/Retail",        # Fallback
+    "APPLE.COM/BILL": "Subscriptions",  # Specific (was Shopping)
+    "APPLE": "Shopping/Retail",         # Fallback
     "DOLLARAMA": "Shopping/Retail",
     "CANADIAN TIRE": "Shopping/Retail",
     "WINNERS": "Shopping/Retail",
@@ -123,6 +130,7 @@ MERCHANT_PATTERNS = {
     "BEST BUY": "Shopping/Retail",
     "LCBO": "Shopping/Retail",
     "BEER STORE": "Shopping/Retail",
+    "GOOGLE STORE": "Shopping/Retail",
     
     # Health
     "SHOPPERS DRUG MART": "Health/Wellness",
@@ -135,9 +143,9 @@ MERCHANT_PATTERNS = {
     "SPOTIFY": "Subscriptions",
     "DISNEY": "Subscriptions",
     "PRIME MEMBER": "Subscriptions",
-    "APPLE.COM/BILL": "Subscriptions",
     "GOOGLE DAZI": "Subscriptions",
-    "YOUTUBE": "Subscriptions"
+    "YOUTUBE": "Subscriptions",
+    "ICLOUD": "Subscriptions"
 }
 
 # Validation Rules
