@@ -147,18 +147,16 @@ def handle_authentication():
         
         if authentication_status == False:
             st.error('Username/password is incorrect')
-            return None, False, None, authenticator
             
         elif authentication_status == None:
             st.info('👋 Enter your credentials to login, or register for a new account!')
-            return None, None, None, authenticator
             
-        else:
+        elif authentication_status:
             # Authenticated successfully
             user_id = username
             email = config['credentials']['usernames'].get(username, {}).get('email', '')
             set_user_session(user_id, email, name)
-            return name, True, username, authenticator
+            st.rerun()  # Rerun to show dashboard
     
     with register_tab:
         st.markdown("### Create a New Account")
