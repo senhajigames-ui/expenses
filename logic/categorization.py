@@ -96,7 +96,7 @@ class CategorizationEngine:
         
         # INCOME DETECTION (keywords that indicate money coming in)
         income_keywords = {
-            'salary': ["SALARY", "PAY", "PAYROLL", "DEPOSIT", "DIRECT DEPOSIT", "UBER", "OPERATION", "EMPLOYMENT"],
+            'salary': ["SALARY", "PAY", "PAYROLL", "DEPOSIT", "DIRECT DEPOSIT", "OPERATION", "EMPLOYMENT"],
             'interest': ["INTEREST", "INT PAID"],
             'cashback': ["CASHBACK", "CASH BACK", "REWARD"],
             'refund': ["REFUND", "RETURN", "REIMBURSEMENT"]

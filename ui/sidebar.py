@@ -62,7 +62,7 @@ class AppInfo:
             
             #### Features:
             - 📥 Smart CSV Import
-            - 🤖 AI Categorization
+            - 🤖 Smart Categorization
             - 📊 Visual Analytics
             - 💰 Budget Tracking
             - 🔧 Transaction Management
