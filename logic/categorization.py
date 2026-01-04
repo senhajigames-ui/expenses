@@ -7,8 +7,7 @@ Priority Order:
 2. Custom user rules (database)
 3. Merchant patterns (config)
 4. WealthSimple stock tickers
-5. AI categorization (Ollama) - if available
-6. Fallback: "Other" / expense
+5. Fallback: "Other" / expense
 """
 
 import logging
@@ -80,9 +79,8 @@ class CategorizationEngine:
         if result:
             return result
         
-        # Priority 5: AI categorization
-        category = self._ai_categorize(description, amount)
-        return category, self._get_transaction_type(category)
+        # Priority 5: Fallback
+        return "Other", "expense"
     
     
     def _check_account_rules(
@@ -210,13 +208,7 @@ class CategorizationEngine:
         return None
     
     
-    def _ai_categorize(self, description: str, amount: float) -> str:
-        """
-        AI Fallback removed. 
-        Returns 'Other' to allow manual categorization.
-        """
-        # AI Logic decommissioning
-        return "Other"
+
     
     
     def _get_transaction_type(self, category: str) -> str:

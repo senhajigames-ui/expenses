@@ -2,7 +2,7 @@
 Business Logic Package
 
 This package contains core business logic:
-- categorization: AI-powered transaction categorization engine
+- categorization: Rule-based transaction categorization engine
 - csv_import: CSV file parsing and import logic
 """
 

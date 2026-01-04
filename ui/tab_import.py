@@ -164,19 +164,11 @@ class MultiFileImporter:
         needs_categorization = [t for t in all_transactions if t.get('category') is None]
         
         if needs_categorization:
-            st.markdown("### 🤖 Step 3: AI Categorization")
-            
-            # Check if Ollama is available
-            from logic.categorization import is_ollama_available
-            ollama_ok = is_ollama_available()
-            
-            if not ollama_ok:
-                st.warning("⚠️ **AI service unavailable** - Using rule-based categorization only. "
-                          "Some transactions may be categorized as 'Other'.")
+            st.markdown("### 🏷️ Step 3: Categorization")
             
             progress.update(
                 0.40,
-                f"🤖 Categorizing {len(needs_categorization)} transactions..."
+                f"🏷️ Categorizing {len(needs_categorization)} transactions..."
             )
             
             categories_and_types = batch_categorize_transactions(
@@ -197,10 +189,7 @@ class MultiFileImporter:
                         txn['category'] = 'Other'
                         txn['transaction_type'] = 'expense'
             
-            if ollama_ok:
-                st.success(f"✅ Categorized {len(needs_categorization)} transactions using AI")
-            else:
-                st.info(f"ℹ️ Categorized {len(needs_categorization)} transactions using rules (AI unavailable)")
+            st.success(f"✅ Categorized {len(needs_categorization)} transactions using Smart Rules")
         else:
             st.markdown("### ✅ Step 3: Categorization")
             st.info("ℹ️ All transactions already categorized")
