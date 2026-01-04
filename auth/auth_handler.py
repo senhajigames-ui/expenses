@@ -84,14 +84,11 @@ def handle_authentication():
         
     elif authentication_status == None:
         st.warning('Please enter your username and password')
-        st.info("**Default credentials:**\n- Username: `demo_user`\n- Password: `DemoPassword123!`")
         return None, None, None, authenticator
         
     else:
         # Authenticated successfully
-        # Get or create user in Supabase
         try:
-            supabase = get_supabase_client()
             
             # For now, use username as user_id (simplified)
             user_id = username

@@ -13,9 +13,7 @@ from database.supabase_client import get_supabase_client, get_user_id
 logger = logging.getLogger(__name__)
 
 
-def calculate_file_hash(file_content: bytes) -> str:
-    """Calculate SHA-256 hash of file content."""
-    return hashlib.sha256(file_content).hexdigest()
+# Note: calculate_file_hash is defined in import_history.py and should be imported from there if needed
 
 
 def check_file_already_imported_supabase(filename: str, file_hash: str) -> bool:

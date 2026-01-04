@@ -9,7 +9,6 @@ import pandas as pd
 import streamlit as st
 from typing import Tuple, List, Dict
 
-# Import Supabase operations
 from database.transaction_operations_supabase import (
     add_transaction_supabase,
     bulk_add_transactions_supabase,
@@ -18,21 +17,9 @@ from database.transaction_operations_supabase import (
     delete_transaction_supabase,
     clear_all_transactions_supabase
 )
+from database.db_utils import should_use_supabase
 
 logger = logging.getLogger(__name__)
-
-
-def should_use_supabase() -> bool:
-    """Check if Supabase should be used for data operations."""
-    # We use Supabase if:
-    # 1. Supabase is configured in secrets
-    # 2. User is authenticated (Supabase requires auth user_id)
-    try:
-        if "supabase" in st.secrets and st.session_state.get('authentication_status'):
-            return True
-    except (FileNotFoundError, AttributeError):
-        pass
-    return False
 
 
 def add_transaction(
@@ -162,12 +149,13 @@ def get_transactions(
         return get_transactions_supabase(start_date, end_date)
 
     try:
-        query = "SELECT * FROM transactions"
+        # Use parameterized queries to prevent SQL injection
         if start_date and end_date:
-            query += f" WHERE date >= '{start_date}' AND date <= '{end_date}'"
-        query += " ORDER BY date DESC"
-        
-        df = pd.read_sql(query, conn)
+            query = "SELECT * FROM transactions WHERE date >= ? AND date <= ? ORDER BY date DESC"
+            df = pd.read_sql(query, conn, params=[start_date, end_date])
+        else:
+            query = "SELECT * FROM transactions ORDER BY date DESC"
+            df = pd.read_sql(query, conn)
         return df
     except Exception as e:
         logger.warning(f"Error getting transactions: {e}")

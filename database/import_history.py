@@ -10,7 +10,6 @@ import streamlit as st
 from datetime import datetime
 from typing import Optional, List, Dict
 
-# Import Supabase operations
 from database.import_history_supabase import (
     check_file_already_imported_supabase,
     record_file_import_supabase,
@@ -18,15 +17,7 @@ from database.import_history_supabase import (
     get_import_stats_supabase,
     clear_import_history_supabase
 )
-
-# Reuse the helper from transaction_operations or define it here
-def should_use_supabase() -> bool:
-    try:
-        if "supabase" in st.secrets and st.session_state.get('authentication_status'):
-            return True
-    except (FileNotFoundError, AttributeError):
-        pass
-    return False
+from database.db_utils import should_use_supabase
 
 logger = logging.getLogger(__name__)
 
