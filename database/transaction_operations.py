@@ -1,243 +1,221 @@
 """
-Transaction database operations.
-Handles CRUD operations for expense/income transactions.
+Transaction Operations
+CRUD operations for transactions using Supabase.
 """
 
-import sqlite3
-import logging
-import pandas as pd
 import streamlit as st
-from typing import Tuple, List, Dict
-
-from database.transaction_operations_supabase import (
-    add_transaction_supabase,
-    bulk_add_transactions_supabase,
-    get_transactions_supabase,
-    check_duplicates_supabase,
-    delete_transaction_supabase,
-    clear_all_transactions_supabase
-)
-from database.db_utils import should_use_supabase
+import pandas as pd
+from typing import Optional, List
+from datetime import datetime
+import logging
+from database.supabase_client import get_supabase_client, get_user_id
 
 logger = logging.getLogger(__name__)
 
 
 def add_transaction(
-    conn: sqlite3.Connection, 
-    date: str, 
-    description: str, 
-    amount: float, 
-    category: str, 
-    source: str, 
-    month: str, 
-    card: str, 
-    transaction_type: str, 
+    date: str,
+    description: str,
+    amount: float,
+    category: str,
+    source: str = "",
+    is_refund: bool = False,
+    month: str = "",
+    card: str = "",
+    transaction_type: str = "",
     transaction_code: str = ""
 ) -> bool:
-    """
-    Add a single transaction to database.
-    
-    Args:
-        conn: Database connection
-        date: Transaction date (YYYY-MM-DD)
-        description: Transaction description
-        amount: Transaction amount
-        category: Category name
-        source: Source (e.g., 'RBC CSV Import')
-        month: Month in YYYY-MM format
-        card: Card type (e.g., 'Visa', 'Cobalt')
-        transaction_type: Type (income/expense/transfer/payment)
-        transaction_code: Optional transaction code
-        
-    Returns:
-        bool: True if added successfully
-    """
-
-    if should_use_supabase():
-        return add_transaction_supabase(
-            date, description, amount, category, 
-            source, False, month, card, 
-            transaction_type, transaction_code
-        )
-
+    """Add a single transaction to Supabase."""
     try:
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO transactions 
-            (date, description, amount, category, source, processed_date, month, card, transaction_type, transaction_code)
-            VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
-        """, (date, description, amount, category, source, month, card, transaction_type, transaction_code))
-        conn.commit()
-        c.close()
+        user_id = get_user_id()
+        if not user_id:
+            raise ValueError("User not authenticated")
+            
+        supabase = get_supabase_client()
+        
+        data = {
+            "user_id": user_id,
+            "date": date,
+            "description": description,
+            "amount": amount,
+            "category": category,
+            "source": source,
+            "is_refund": is_refund,
+            "month": month,
+            "card": card,
+            "transaction_type": transaction_type,
+            "transaction_code": transaction_code,
+            "processed_date": datetime.now().isoformat()
+        }
+        
+        result = supabase.table('transactions').insert(data).execute()
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error adding transaction: {e}")
+        
+    except Exception as e:
+        logger.error(f"Failed to add transaction: {e}")
         return False
 
 
-def bulk_add_transactions(conn: sqlite3.Connection, transactions: list) -> Tuple[int, int]:
-    """
-    Add multiple transactions to database efficiently.
-    
-    Args:
-        conn: Database connection
-        transactions: List of transaction dictionaries
-        
-    Tuple[int, int]: (success_count, fail_count)
-    """
-    if should_use_supabase():
-        if bulk_add_transactions_supabase(transactions):
-            return len(transactions), 0
-        else:
-            return 0, len(transactions)
-
-    success = 0
-    fail = 0
-    
+def bulk_add_transactions(transactions: List[dict]) -> bool:
+    """Add multiple transactions to Supabase."""
     try:
-        c = conn.cursor()
-        
-        # Prepare data for executemany
-        data_to_insert = []
-        for txn in transactions:
-            data_to_insert.append((
-                txn['date'],
-                txn['description'],
-                txn['amount'],
-                txn['category'],
-                f"{txn['card']} CSV Import",
-                txn['month'],
-                txn['card'],
-                txn['transaction_type'],
-                txn.get('transaction_code', '')
-            ))
+        user_id = get_user_id()
+        if not user_id:
+            raise ValueError("User not authenticated")
             
-        c.executemany("""
-            INSERT INTO transactions 
-            (date, description, amount, category, source, processed_date, month, card, transaction_type, transaction_code)
-            VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)
-        """, data_to_insert)
+        supabase = get_supabase_client()
         
-        conn.commit()
-        success = c.rowcount
-        c.close()
+        # Add user_id and processed_date to each transaction
+        for txn in transactions:
+            txn['user_id'] = user_id
+            txn['processed_date'] = datetime.now().isoformat()
         
-    except sqlite3.Error as e:
-        logger.warning(f"Error bulk adding transactions: {e}")
-        fail = len(transactions)
+        result = supabase.table('transactions').insert(transactions).execute()
+        return True
         
-    return success, fail
-
-
-def get_transactions(
-    conn: sqlite3.Connection, 
-    start_date: str = None, 
-    end_date: str = None
-) -> pd.DataFrame:
-    """
-    Get transactions from database with optional date filtering.
-    
-    Args:
-        conn: Database connection
-        start_date: Optional start date filter
-        end_date: Optional end date filter
-        
-    Returns:
-        DataFrame: Transactions dataframe
-    """
-    if should_use_supabase():
-        return get_transactions_supabase(start_date, end_date)
-
-    try:
-        # Use parameterized queries to prevent SQL injection
-        if start_date and end_date:
-            query = "SELECT * FROM transactions WHERE date >= ? AND date <= ? ORDER BY date DESC"
-            df = pd.read_sql(query, conn, params=[start_date, end_date])
-        else:
-            query = "SELECT * FROM transactions ORDER BY date DESC"
-            df = pd.read_sql(query, conn)
-        return df
     except Exception as e:
-        logger.warning(f"Error getting transactions: {e}")
+        logger.error(f"Failed to bulk add transactions: {e}")
+        return False
+
+
+def get_transactions(conn = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:
+    """
+    Get transactions from Supabase.
+    Args:
+        conn: Ignored (legacy compatibility)
+        start_date: Optional start date
+        end_date: Optional end date
+    """
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return pd.DataFrame()
+            
+        supabase = get_supabase_client()
+        
+        query = supabase.table('transactions').select("*").eq('user_id', user_id)
+        
+        if start_date:
+            query = query.gte('date', start_date)
+        if end_date:
+            query = query.lte('date', end_date)
+            
+        result = query.execute()
+        
+        if not result.data:
+            return pd.DataFrame()
+            
+        df = pd.DataFrame(result.data)
+        return df
+        
+    except Exception as e:
+        logger.error(f"Failed to get transactions: {e}")
         return pd.DataFrame()
 
 
-def check_duplicates(conn, transactions):
+def check_duplicates(conn, transactions_df):
     """
-    Check for duplicate transactions in database.
-    
+    Check for duplicate transactions.
     Args:
-        conn: Database connection
-        transactions: List of transaction dictionaries
-        
-    Returns:
-        list: List of duplicate transactions
+        conn: Ignored (legacy compatibility)
+        transactions_df: DataFrame/List of transactions
     """
-    if should_use_supabase():
-        # Convert list of dicts to DataFrame for check_duplicates_supabase
-        df = pd.DataFrame(transactions)
-        result_df = check_duplicates_supabase(df)
-        return result_df.to_dict('records')
-
-    duplicates = []
-    c = conn.cursor()
-    
-    for txn in transactions:
-        c.execute("""
-            SELECT COUNT(*) FROM transactions 
-            WHERE date = ? AND description = ? AND amount = ?
-        """, (txn['date'], txn['description'], txn['amount']))
-        
-        if c.fetchone()[0] > 0:
-            duplicates.append(txn)
-    
-    c.close()
-    return duplicates
-
-
-def delete_transaction(conn, transaction_id):
-    """
-    Delete a transaction.
-    
-    Args:
-        conn: Database connection
-        transaction_id: ID of transaction to delete
-        
-    Returns:
-        bool: True if deleted successfully
-    """
-    if should_use_supabase():
-        return delete_transaction_supabase(transaction_id)
+    # Handle list input (legacy) convert to DF
+    if isinstance(transactions_df, list):
+        transactions_df = pd.DataFrame(transactions_df)
 
     try:
-        c = conn.cursor()
-        c.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
-        conn.commit()
-        c.close()
+        user_id = get_user_id()
+        if not user_id or transactions_df.empty:
+            return pd.DataFrame() if isinstance(transactions_df, pd.DataFrame) else []
+            
+        supabase = get_supabase_client()
+        
+        # Get existing transactions
+        existing = get_transactions()
+        
+        if existing.empty:
+            return pd.DataFrame() if isinstance(transactions_df, pd.DataFrame) else []
+            
+        # Find duplicates based on date, description, and amount
+        duplicates = []
+        for _, new_txn in transactions_df.iterrows():
+            matches = existing[
+                (existing['date'] == str(new_txn['date'])) &
+                (existing['description'] == new_txn['description']) &
+                (abs(existing['amount'] - new_txn['amount']) < 0.01)
+            ]
+            if not matches.empty:
+                duplicates.append(new_txn)
+                
+        # Return format matching input type if needed, but managing consistent return type is better
+        # Legacy returned list of dicts or DF. Let's return what matches input.
+        result_df = pd.DataFrame(duplicates) if duplicates else pd.DataFrame()
+        return result_df
+        
+    except Exception as e:
+        logger.error(f"Failed to check duplicates: {e}")
+        return pd.DataFrame()
+
+
+def delete_transaction(conn, transaction_id: int) -> bool:
+    """
+    Delete a transaction from Supabase.
+    Args:
+         conn: Ignored
+         transaction_id: ID to delete
+    """
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Delete with RLS check (user can only delete their own)
+        result = supabase.table('transactions').delete().eq('id', transaction_id).eq('user_id', user_id).execute()
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error deleting transaction: {e}")
+        
+    except Exception as e:
+        logger.error(f"Failed to delete transaction: {e}")
         return False
 
 
-def clear_all_transactions(conn):
+def clear_all_transactions(conn) -> bool:
     """
-    Delete all transactions from database.
-    
+    Clear all transactions for current user.
     Args:
-        conn: Database connection
-        
-    Returns:
-        bool: True if cleared successfully
+        conn: Ignored
     """
-    if should_use_supabase():
-        return clear_all_transactions_supabase()
-
     try:
-        c = conn.cursor()
-        c.execute("DELETE FROM transactions")
-        conn.commit()
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Delete all user's transactions
+        result = supabase.table('transactions').delete().eq('user_id', user_id).execute()
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error clearing transactions: {e}")
+        
+    except Exception as e:
+        logger.error(f"Failed to clear transactions: {e}")
+        return False
+
+
+def update_transaction(transaction_id: int, updates: dict) -> bool:
+    """Update a transaction in Supabase."""
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Update with RLS check
+        result = supabase.table('transactions').update(updates).eq('id', transaction_id).eq('user_id', user_id).execute()
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to update transaction: {e}")
         return False

@@ -1,20 +1,12 @@
 """
-Budget management database operations.
-Handles budget setting and retrieval, and merchant categorization rules.
+Budget Operations
+Budget management and merchant rules using Supabase.
 """
 
-import sqlite3
-import logging
 import streamlit as st
-import pandas as pd
-
-from database.budget_operations_supabase import (
-    get_budgets_supabase,
-    save_budget_supabase,
-    load_merchant_rules_supabase,
-    save_merchant_rule_supabase
-)
-from database.db_utils import should_use_supabase
+from typing import Dict
+import logging
+from database.supabase_client import get_supabase_client, get_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -22,123 +14,120 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 300
 
 
-def get_budgets(_conn):
-    """
-    Get all budget settings.
-    
-    Args:
-        _conn: Database connection (underscore prefix for st.cache_data)
-        
-    Returns:
-        dict: Dictionary mapping category to budget amount
-    """
-    # Check Supabase BEFORE cache to avoid returning stale cached SQLite data
-    if should_use_supabase():
-        return get_budgets_supabase()
-    
-    return _get_budgets_sqlite(_conn)
-
-
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def _get_budgets_sqlite(_conn):
-    """Internal cached SQLite query for budgets."""
+def get_budgets(_conn = None) -> Dict[str, float]:
+    """
+    Get all budget settings from Supabase.
+    Args:
+        _conn: Ignored (legacy compatibility)
+    """
     try:
-        df = pd.read_sql("SELECT * FROM budgets", _conn)
+        user_id = get_user_id()
+        if not user_id:
+            return {}
+            
+        supabase = get_supabase_client()
+        result = supabase.table('budgets').select("*").eq('user_id', user_id).execute()
+        
         budgets = {}
-        for _, row in df.iterrows():
-            budgets[row['category']] = row['monthly_budget']
+        if result.data:
+            for row in result.data:
+                budgets[row['category']] = row['monthly_budget']
+                
         return budgets
     except Exception as e:
-        logger.warning(f"Error getting budgets: {e}")
+        logger.error(f"Error getting budgets: {e}")
         return {}
 
 
-def save_budget(conn, category, amount):
+def save_budget(conn, category: str, amount: float) -> bool:
     """
-    Save or update a budget for a category.
-    
+    Save or update a budget for a category in Supabase.
     Args:
-        conn: Database connection
+        conn: Ignored
         category: Category name
-        amount: Monthly budget amount
-        
-    Returns:
-        bool: True if saved successfully
+        amount: Budget amount
     """
-    if should_use_supabase():
-        return save_budget_supabase(category, amount)
-
     try:
-        c = conn.cursor()
-        c.execute("""
-            INSERT OR REPLACE INTO budgets (category, monthly_budget) 
-            VALUES (?, ?)
-        """, (category, amount))
-        conn.commit()
-        # Clear cache after saving
-        _get_budgets_sqlite.clear()
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Upsert budget
+        data = {
+            "user_id": user_id,
+            "category": category,
+            "monthly_budget": amount
+        }
+        
+        # On conflict is handled by having a unique constraint on (user_id, category)
+        result = supabase.table('budgets').upsert(data, on_conflict="user_id, category").execute()
+        
+        # Clear cache
+        get_budgets.clear()
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error saving budget: {e}")
+    except Exception as e:
+        logger.error(f"Error saving budget: {e}")
         return False
 
 
-def load_merchant_rules(_conn):
-    """
-    Load merchant categorization rules.
-    
-    Args:
-        _conn: Database connection (underscore prefix for st.cache_data)
-        
-    Returns:
-        dict: Dictionary mapping merchant pattern to category
-    """
-    # Check Supabase BEFORE cache to avoid returning stale cached SQLite data
-    if should_use_supabase():
-        return load_merchant_rules_supabase()
-    
-    return _load_merchant_rules_sqlite(_conn)
-
-
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
-def _load_merchant_rules_sqlite(_conn):
-    """Internal cached SQLite query for merchant rules."""
+def load_merchant_rules(_conn = None) -> Dict[str, str]:
+    """
+    Load merchant categorization rules from Supabase.
+    Args:
+        _conn: Ignored
+    """
     try:
-        df = pd.read_sql("SELECT * FROM merchant_rules", _conn)
+        user_id = get_user_id()
+        if not user_id:
+            return {}
+            
+        supabase = get_supabase_client()
+        result = supabase.table('merchant_rules').select("*").eq('user_id', user_id).execute()
+        
         rules = {}
-        for _, row in df.iterrows():
-            rules[row['merchant_pattern'].upper()] = row['category']
+        if result.data:
+            for row in result.data:
+                # Store merchant pattern in uppercase for case-insensitive matching logic
+                rules[row['merchant_pattern'].upper()] = row['category']
+                
         return rules
     except Exception as e:
-        logger.warning(f"Error loading merchant rules: {e}")
+        logger.error(f"Error loading merchant rules: {e}")
         return {}
 
 
-def save_merchant_rule(conn, merchant, category):
+def save_merchant_rule(conn, merchant: str, category: str) -> bool:
     """
-    Save a merchant categorization rule.
-    
+    Save a merchant categorization rule in Supabase.
     Args:
-        conn: Database connection
-        merchant: Merchant name/pattern
-        category: Category to assign
-        
-    Returns:
-        bool: True if saved successfully
+        conn: Ignored
+        merchant: Merchant pattern
+        category: Category
     """
-    if should_use_supabase():
-        return save_merchant_rule_supabase(merchant, category)
-
     try:
-        c = conn.cursor()
-        c.execute("""
-            INSERT OR REPLACE INTO merchant_rules (merchant_pattern, category) 
-            VALUES (?, ?)
-        """, (merchant.upper(), category))
-        conn.commit()
-        # Clear cache after saving
-        _load_merchant_rules_sqlite.clear()
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Upsert rule
+        data = {
+            "user_id": user_id,
+            "merchant_pattern": merchant.upper(),
+            "category": category
+        }
+        
+        # On conflict is handled by having a unique constraint on (user_id, merchant_pattern)
+        result = supabase.table('merchant_rules').upsert(data, on_conflict="user_id, merchant_pattern").execute()
+        
+        # Clear cache
+        load_merchant_rules.clear()
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error saving merchant rule: {e}")
+    except Exception as e:
+        logger.error(f"Error saving merchant rule: {e}")
         return False

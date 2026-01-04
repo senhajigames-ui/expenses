@@ -1,189 +1,179 @@
 """
-Import history tracking operations.
-Prevents duplicate file imports and maintains import logs.
+Import History Operations
+Import history tracking using Supabase.
 """
 
-import sqlite3
-import hashlib
-import logging
 import streamlit as st
+import logging
 from datetime import datetime
-from typing import Optional, List, Dict
-
-from database.import_history_supabase import (
-    check_file_already_imported_supabase,
-    record_file_import_supabase,
-    get_import_history_supabase,
-    get_import_stats_supabase,
-    clear_import_history_supabase
-)
-from database.db_utils import should_use_supabase
+from typing import Dict, List
+import hashlib
+from database.supabase_client import get_supabase_client, get_user_id
 
 logger = logging.getLogger(__name__)
 
 
-def calculate_file_hash(file_content: bytes) -> str:
-    """Calculate SHA-256 hash of file content."""
-    return hashlib.sha256(file_content).hexdigest()
-
-
-def check_file_already_imported(conn: sqlite3.Connection, filename: str, file_hash: str) -> bool:
+def calculate_file_hash(file) -> str:
     """
-    Check if a file has already been imported.
-    
-    Args:
-        conn: Database connection
-        filename: Name of the file
-        file_hash: SHA-256 hash of file content
-        
-    Returns:
-        bool: True if file was already imported
+    Calculate hash of file content.
+    Used for duplicate detection.
     """
-    if should_use_supabase():
-        return check_file_already_imported_supabase(filename, file_hash)
-
     try:
-        c = conn.cursor()
-        c.execute("""
-            SELECT COUNT(*) FROM import_history 
-            WHERE filename = ? AND file_hash = ?
-        """, (filename, file_hash))
+        # Reset file pointer
+        file.seek(0)
+        content = file.read()
+        file.seek(0) # Reset again for later reading
         
-        return c.fetchone()[0] > 0
-    except sqlite3.Error as e:
-        logger.warning(f"Error checking import history: {e}")
+        # Calculate MD5 hash
+        return hashlib.md5(content).hexdigest()
+    except Exception as e:
+        logger.error(f"Error calculating file hash: {e}")
+        return ""
+
+
+def check_file_already_imported(filename: str, file_hash: str) -> bool:
+    """Check if a file has already been imported in Supabase."""
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        # Count matching records
+        result = supabase.table('import_history')\
+            .select("id", count='exact')\
+            .eq('user_id', user_id)\
+            .eq('filename', filename)\
+            .eq('file_hash', file_hash)\
+            .execute()
+            
+        return result.count > 0
+    except Exception as e:
+        logger.error(f"Error checking import history: {e}")
         return False
 
 
-def record_file_import(
-    conn: sqlite3.Connection, 
-    filename: str, 
-    file_hash: str, 
-    transactions_imported: int
-) -> bool:
-    """
-    Record a file import in the history.
-    
-    Args:
-        conn: Database connection
-        filename: Name of the file
-        file_hash: SHA-256 hash of file content
-        transactions_imported: Number of transactions imported
-        
-    Returns:
-        bool: True if recorded successfully
-    """
-    if should_use_supabase():
-        return record_file_import_supabase(filename, file_hash, transactions_imported)
-
+def record_file_import(filename: str, file_hash: str, transactions_imported: int) -> bool:
+    """Record a file import in Supabase."""
     try:
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO import_history (filename, import_date, transactions_imported, file_hash)
-            VALUES (?, datetime('now'), ?, ?)
-        """, (filename, transactions_imported, file_hash))
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
         
-        conn.commit()
+        data = {
+            "user_id": user_id,
+            "filename": filename,
+            "file_hash": file_hash,
+            "transactions_imported": transactions_imported,
+            "import_date": datetime.now().isoformat()
+        }
+        
+        result = supabase.table('import_history').insert(data).execute()
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error recording import: {e}")
+    except Exception as e:
+        logger.error(f"Error recording import: {e}")
         return False
 
 
-def get_import_history(conn: sqlite3.Connection, limit: int = 10) -> List[Dict]:
+def get_import_history(conn = None, limit: int = 10) -> List[Dict]:
     """
-    Get recent import history.
-    
+    Get recent import history from Supabase.
     Args:
-        conn: Database connection
-        limit: Maximum number of records to return
-        
-    Returns:
-        List of import history dictionaries
+        conn: Ignored
     """
-    if should_use_supabase():
-        return get_import_history_supabase(limit)
-
     try:
-        c = conn.cursor()
-        c.execute("""
-            SELECT filename, import_date, transactions_imported 
-            FROM import_history 
-            ORDER BY import_date DESC 
-            LIMIT ?
-        """, (limit,))
+        user_id = get_user_id()
+        if not user_id:
+            return []
+            
+        supabase = get_supabase_client()
         
-        rows = c.fetchall()
-        return [
-            {
-                'filename': row[0],
-                'import_date': row[1],
-                'transactions_imported': row[2]
-            }
-            for row in rows
-        ]
-    except sqlite3.Error as e:
-        logger.warning(f"Error getting import history: {e}")
+        result = supabase.table('import_history')\
+            .select("filename, import_date, transactions_imported")\
+            .eq('user_id', user_id)\
+            .order('import_date', desc=True)\
+            .limit(limit)\
+            .execute()
+            
+        if not result.data:
+            return []
+            
+        return result.data
+        
+    except Exception as e:
+        logger.error(f"Error getting import history: {e}")
         return []
 
 
-def get_import_stats(conn: sqlite3.Connection) -> Dict:
+def get_import_stats(conn = None) -> Dict:
     """
-    Get import statistics.
-    
-    Returns:
-        Dictionary with import stats
+    Get import statistics from Supabase.
+    Args:
+        conn: Ignored
     """
-    if should_use_supabase():
-        return get_import_stats_supabase()
-
     try:
-        c = conn.cursor()
+        user_id = get_user_id()
+        if not user_id:
+            return {'total_files': 0, 'total_transactions': 0, 'last_import': None}
+            
+        supabase = get_supabase_client()
         
-        # Total files imported
-        c.execute("SELECT COUNT(*) FROM import_history")
-        total_files = c.fetchone()[0]
+        # 1. Total files
+        files_result = supabase.table('import_history')\
+            .select("id", count='exact')\
+            .eq('user_id', user_id)\
+            .execute()
+        total_files = files_result.count
         
-        # Total transactions imported
-        c.execute("SELECT SUM(transactions_imported) FROM import_history")
-        total_transactions = c.fetchone()[0] or 0
+        # 2. Total transactions (sum)
+        # Fetch only transactions_imported column
+        txn_result = supabase.table('import_history')\
+            .select("transactions_imported")\
+            .eq('user_id', user_id)\
+            .execute()
+            
+        total_transactions = sum(row['transactions_imported'] for row in txn_result.data) if txn_result.data else 0
         
-        # Last import date
-        c.execute("SELECT MAX(import_date) FROM import_history")
-        last_import = c.fetchone()[0]
-        
+        # 3. Last import
+        last_import = None
+        last_result = supabase.table('import_history')\
+            .select("import_date")\
+            .eq('user_id', user_id)\
+            .order("import_date", desc=True)\
+            .limit(1)\
+            .execute()
+            
+        if last_result.data:
+            last_import = last_result.data[0]['import_date']
+            
         return {
             'total_files': total_files,
             'total_transactions': total_transactions,
             'last_import': last_import
         }
-    except sqlite3.Error as e:
-        logger.warning(f"Error getting import stats: {e}")
-        return {
-            'total_files': 0,
-            'total_transactions': 0,
-            'last_import': None
-        }
+    except Exception as e:
+        logger.error(f"Error getting import stats: {e}")
+        return {'total_files': 0, 'total_transactions': 0, 'last_import': None}
 
 
-def clear_import_history(conn: sqlite3.Connection) -> bool:
-    """
-    Clear all import history records.
-    
-    Args:
-        conn: Database connection
-        
-    Returns:
-        bool: True if cleared successfully
-    """
-    if should_use_supabase():
-        return clear_import_history_supabase()
-
+def clear_import_history(conn = None) -> bool:
+    """Clear all import history for user."""
     try:
-        c = conn.cursor()
-        c.execute("DELETE FROM import_history")
-        conn.commit()
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        
+        result = supabase.table('import_history')\
+            .delete()\
+            .eq('user_id', user_id)\
+            .execute()
+            
         return True
-    except sqlite3.Error as e:
-        logger.warning(f"Error clearing import history: {e}")
+    except Exception as e:
+        logger.error(f"Error clearing import history: {e}")
         return False
