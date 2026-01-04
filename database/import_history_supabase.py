@@ -4,7 +4,6 @@ Import history tracking using Supabase as backend.
 """
 
 import streamlit as st
-import hashlib
 import logging
 from datetime import datetime
 from typing import Dict, List
