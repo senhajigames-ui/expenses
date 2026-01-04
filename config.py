@@ -57,18 +57,87 @@ TRANSACTION_TYPES = {
 
 # Merchant Pattern Matching
 MERCHANT_PATTERNS = {
-    "CHIPOTLE": "Dining/Restaurants",
-    "WALMART": "Groceries",
+    # Groceries
+    "LOBLAWS": "Groceries",
+    "NO FRILLS": "Groceries",
+    "METRO": "Groceries",
+    "SOBEYS": "Groceries",
+    "LONGO": "Groceries",
+    "FRESHCO": "Groceries",
+    "VALU-MART": "Groceries",
+    "RABBA": "Groceries",
+    "FARM BOY": "Groceries",
+    "WHOLE FOODS": "Groceries",
+    "INSTACART": "Groceries",
     "COSTCO": "Groceries",
-    "UBER": "Transportation",
-    "NETFLIX": "Subscriptions",
-    "SPOTIFY": "Subscriptions",
-    "AMAZON": "Shopping/Retail",
+    "WALMART": "Groceries",
+    
+    # Dining / Fast Food
+    "MCDONALD": "Dining/Restaurants",
+    "BURGER KING": "Dining/Restaurants",
+    "SUBWAY": "Dining/Restaurants",
     "TIM HORTONS": "Dining/Restaurants",
     "STARBUCKS": "Dining/Restaurants",
+    "A&W": "Dining/Restaurants",
+    "KFC": "Dining/Restaurants",
+    "POPEYES": "Dining/Restaurants",
+    "DOMINO": "Dining/Restaurants",
+    "PIZZA": "Dining/Restaurants",
+    "UBER EATS": "Dining/Restaurants",
+    "SKIPTHEDISHES": "Dining/Restaurants",
+    "DOORDASH": "Dining/Restaurants",
+    "CHIPOTLE": "Dining/Restaurants",
+    "KEG": "Dining/Restaurants",
+    "CACTUS CLUB": "Dining/Restaurants",
+    
+    # Transportation
+    "UBER": "Transportation",
+    "LYFT": "Transportation",
+    "PRESTO": "Transportation",
+    "GO TRANSIT": "Transportation",
+    "UP EXPRESS": "Transportation",
+    "TTC": "Transportation",
+    "PARKING": "Transportation",
+    "GREEN P": "Transportation",
+    "IMPARK": "Transportation",
+    
+    # Gas
     "ESSO": "Gas/Fuel",
     "SHELL": "Gas/Fuel",
-    "PETRO": "Gas/Fuel"
+    "PETRO": "Gas/Fuel",
+    "CANADIAN TIRE GAS": "Gas/Fuel",
+    "MOBIL": "Gas/Fuel",
+    
+    # Shopping / Retail
+    "AMAZON": "Shopping/Retail",
+    "APPLE": "Shopping/Retail",
+    "DOLLARAMA": "Shopping/Retail",
+    "CANADIAN TIRE": "Shopping/Retail",
+    "WINNERS": "Shopping/Retail",
+    "MARSHALLS": "Shopping/Retail",
+    "HUDSON": "Shopping/Retail",
+    "UNIQLO": "Shopping/Retail",
+    "ZARA": "Shopping/Retail",
+    "H&M": "Shopping/Retail",
+    "IKEA": "Shopping/Retail",
+    "BEST BUY": "Shopping/Retail",
+    "LCBO": "Shopping/Retail",
+    "BEER STORE": "Shopping/Retail",
+    
+    # Health
+    "SHOPPERS DRUG MART": "Health/Wellness",
+    "REXALL": "Health/Wellness",
+    "GOODLIFE": "Health/Wellness",
+    "GYM": "Health/Wellness",
+    
+    # Subscriptions
+    "NETFLIX": "Subscriptions",
+    "SPOTIFY": "Subscriptions",
+    "DISNEY": "Subscriptions",
+    "PRIME MEMBER": "Subscriptions",
+    "APPLE.COM/BILL": "Subscriptions",
+    "GOOGLE DAZI": "Subscriptions",
+    "YOUTUBE": "Subscriptions"
 }
 
 # Validation Rules
