@@ -29,5 +29,8 @@ Thumbs.db
 # Logs
 *.log
 
+# Build artifacts
+dist_build/
+
 # Migration scripts (optional - remove if you want to keep)
 scripts/migrate_data.py
