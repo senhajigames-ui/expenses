@@ -1,6 +1,6 @@
 """
 Transaction Categorization Engine
-Handles AI-based and rule-based categorization with priority hierarchy.
+Handles rule-based transaction categorization with priority hierarchy.
 
 Priority Order:
 1. Checking account specific rules (hardcoded)

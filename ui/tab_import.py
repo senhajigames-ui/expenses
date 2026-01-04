@@ -5,7 +5,7 @@ Handles:
 - Multi-file CSV upload
 - Format detection (RBC Credit, RBC Checking, WealthSimple)
 - Duplicate detection
-- Batch AI categorization
+- Batch categorization
 - Progress tracking
 """
 
@@ -275,7 +275,7 @@ def render_import_tab(conn, all_transactions: pd.DataFrame):
         
         ### Features
         - ✅ Automatic duplicate detection
-        - ✅ AI-powered categorization
+        - ✅ Smart categorization
         - ✅ Multi-file batch import
         - ✅ Progress tracking
         """)
@@ -409,7 +409,7 @@ def _show_recent_imports(conn, all_transactions: pd.DataFrame):
             st.markdown("""
             After importing, you'll see:
             - 📊 Transaction summaries and charts
-            - 🤖 AI-categorized expenses
+            - 🏷️ Auto-categorized expenses
             - 📈 Spending trends over time
             - 💰 Budget tracking
             """)
