@@ -42,6 +42,11 @@ def load_auth_config():
     try:
         with open('auth_config.yaml') as file:
             config = yaml.load(file, Loader=SafeLoader)
+        
+        # Override cookie name to ensure uniqueness and persistence
+        if 'cookie' in config:
+            config['cookie']['name'] = 'expense_tracker_session_safe'
+            
         return config
     except Exception as e:
         logger.error(f"Failed to load auth config: {e}")
@@ -49,9 +54,12 @@ def load_auth_config():
         st.stop()
 
 
+@st.cache_data(ttl=300)
 def get_users_from_supabase():
-    """Load registered users from Supabase."""
+    """Load registered users from Supabase (cached for 5 mins)."""
     try:
+        # We must initialize client here inside the cached function
+        from database.supabase_client import get_supabase_client
         supabase = get_supabase_client()
         if not supabase:
             return {}
