@@ -14,14 +14,36 @@ logger = logging.getLogger(__name__)
 
 
 def load_auth_config():
-    """Load authentication configuration from YAML."""
+    """
+    Load authentication configuration.
+    Tries st.secrets first (for Streamlit Cloud), falls back to YAML file (local dev).
+    """
+    try:
+        # Try loading from secrets (Streamlit Cloud)
+        if "credentials" in st.secrets:
+            config = {
+                'credentials': dict(st.secrets['credentials']),
+                'cookie': dict(st.secrets['cookie']),
+                'pre-authorized': dict(st.secrets.get('pre-authorized', {'emails': []}))
+            }
+            # Convert nested secrets to proper dict format
+            if 'usernames' in config['credentials']:
+                usernames = {}
+                for username, user_data in config['credentials']['usernames'].items():
+                    usernames[username] = dict(user_data)
+                config['credentials']['usernames'] = usernames
+            return config
+    except Exception as e:
+        logger.warning(f"Could not load from secrets: {e}")
+    
+    # Fall back to YAML file (local development)
     try:
         with open('auth_config.yaml') as file:
             config = yaml.load(file, Loader=SafeLoader)
         return config
     except Exception as e:
         logger.error(f"Failed to load auth config: {e}")
-        st.error("Authentication configuration error")
+        st.error("Authentication configuration error. Check secrets or auth_config.yaml")
         st.stop()
 
 
