@@ -48,6 +48,11 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
         common_filtered = common_filtered[
             common_filtered['description'].str.contains(search, case=False, na=False)
         ]
+    
+    # Handle empty state after filtering
+    if common_filtered.empty:
+        st.info("📭 No transactions found. Try adjusting filters or import some data!")
+        return
         
     # Separate Transfer transactions from the common filtered set
     # This ensures they are always visible regardless of Type/Category selection
