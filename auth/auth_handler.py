@@ -7,7 +7,7 @@ import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
-from database.supabase_client import set_user_session, clear_user_session, get_supabase_client
+from database.supabase_client import set_user_session, clear_user_session
 import logging
 
 logger = logging.getLogger(__name__)

@@ -256,7 +256,8 @@ def render_overview_tab(conn, all_transactions: pd.DataFrame):
         # Date Filter
         presets = get_date_range_presets()
         preset_keys = list(presets.keys())
-        default_index = preset_keys.index("Last Month") if "Last Month" in preset_keys else 0
+        # Default to All Time so users see data immediately (especially if data is older)
+        default_index = preset_keys.index("All Time") if "All Time" in preset_keys else 0
         
         selected_preset = st.selectbox(
             "Period", 

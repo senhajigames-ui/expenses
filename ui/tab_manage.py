@@ -165,12 +165,15 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
             st.write("")  # Spacer
             st.write("")  # Spacer
             if st.button("🗑️ Delete", type="primary", width="stretch", key="delete_btn"):
-                result = updater._delete_transaction(int(delete_id))
-                if result['success']:
-                    st.success(f"✅ Deleted transaction ID {delete_id}")
-                    st.rerun()
+                if delete_id < 1:
+                    st.error("❌ Please enter a valid Transaction ID")
                 else:
-                    st.error(f"❌ Failed to delete transaction ID {delete_id}")
+                    result = updater._delete_transaction(int(delete_id))
+                    if result['success']:
+                        st.success(f"✅ Deleted transaction ID {delete_id}")
+                        st.rerun()
+                    else:
+                        st.warning(f"⚠️ Transaction ID {delete_id} not found or could not be deleted")
         
         # Delete all transactions
         st.divider()
@@ -187,17 +190,20 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
             with col1:
                 if st.button("✅ Yes, Delete Everything", type="primary", width="stretch", key="confirm_delete_all_yes"):
                     try:
-                        c = conn.cursor()
-                        c.execute("DELETE FROM transactions")
-                        conn.commit()
-                        count = c.rowcount
+                        from database.transaction_operations import clear_all_transactions
                         
-                        # Also clear import history so files can be re-imported
-                        clear_import_history(conn)
+                        # Use the proper function that routes to Supabase when appropriate
+                        success = clear_all_transactions(conn)
                         
-                        st.success(f"✅ Deleted all {count} transactions and cleared import history!")
-                        st.session_state.confirm_delete_all = False
-                        st.rerun()
+                        if success:
+                            # Also clear import history so files can be re-imported
+                            clear_import_history(conn)
+                            
+                            st.success("✅ Deleted all transactions and cleared import history!")
+                            st.session_state.confirm_delete_all = False
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to delete transactions")
                     except Exception as e:
                         st.error(f"❌ Failed to delete transactions: {e}")
             
