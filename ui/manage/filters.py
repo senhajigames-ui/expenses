@@ -96,10 +96,14 @@ class TransactionFilter:
     @staticmethod
     def _render_month_filter(all_transactions: pd.DataFrame):
         """Render month filter dropdown."""
-        months = ["All"] + sorted(
-            all_transactions['month'].unique().tolist(), 
-            reverse=True
-        )
+        # Handle empty DataFrame
+        if all_transactions.empty:
+            months = ["All"]
+        else:
+            months = ["All"] + sorted(
+                all_transactions['month'].unique().tolist(), 
+                reverse=True
+            )
         st.selectbox("Month", months, key='manage_month')
     
     
@@ -117,6 +121,17 @@ class TransactionFilter:
     def _render_category_filter(all_transactions: pd.DataFrame):
         """Render category filter (dynamic based on type)."""
         type_filter = st.session_state.get('manage_type', 'All')
+        
+        # Handle empty DataFrame
+        if all_transactions.empty:
+            st.selectbox(
+                "Category", 
+                ["All"], 
+                key='manage_cat',
+                disabled=True,
+                help="No transactions available"
+            )
+            return
         
         if type_filter == "All":
             # Show all categories but disabled
@@ -163,6 +178,10 @@ class TransactionFilter:
         }
         
         category_list = type_to_categories.get(type_filter, [])
+        
+        # Handle empty DataFrame
+        if all_transactions.empty:
+            return ["All"]
         
         # Only show categories that exist in transactions
         available = [
