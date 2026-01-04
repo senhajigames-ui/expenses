@@ -174,7 +174,7 @@ def delete_transaction(conn, transaction_id: int) -> bool:
         
         # Delete with RLS check (user can only delete their own)
         result = supabase.table('transactions').delete().eq('id', transaction_id).eq('user_id', user_id).execute()
-        return True
+        return len(result.data) > 0
         
     except Exception as e:
         logger.error(f"Failed to delete transaction: {e}")
@@ -196,7 +196,7 @@ def clear_all_transactions(conn) -> bool:
         
         # Delete all user's transactions
         result = supabase.table('transactions').delete().eq('user_id', user_id).execute()
-        return True
+        return len(result.data) > 0
         
     except Exception as e:
         logger.error(f"Failed to clear transactions: {e}")
@@ -214,7 +214,7 @@ def update_transaction(transaction_id: int, updates: dict) -> bool:
         
         # Update with RLS check
         result = supabase.table('transactions').update(updates).eq('id', transaction_id).eq('user_id', user_id).execute()
-        return True
+        return len(result.data) > 0
         
     except Exception as e:
         logger.error(f"Failed to update transaction: {e}")
