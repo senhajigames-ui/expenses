@@ -107,11 +107,12 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
     st.caption("💡 **Tip:** Click any cell to edit • Changes save automatically • Sort by clicking column headers")
     
     # Prepare data for AG Grid
-    aggrid_df = main_transactions.copy()
-    aggrid_df = aggrid_df.sort_values('date', ascending=False)
-    
-    # Format for display
-    display_df = prepare_aggrid_data(aggrid_df)
+    with st.spinner("Loading transactions..."):
+        aggrid_df = main_transactions.copy()
+        aggrid_df = aggrid_df.sort_values('date', ascending=False)
+        
+        # Format for display
+        display_df = prepare_aggrid_data(aggrid_df)
     
     # Render AG Grid
     grid_response = render_aggrid_table(display_df, key="main_aggrid")

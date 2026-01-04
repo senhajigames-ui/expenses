@@ -272,7 +272,8 @@ def render_overview_tab(conn, all_transactions: pd.DataFrame):
     all_transactions['date_obj'] = pd.to_datetime(all_transactions['date']).dt.date
     
     # Calculate Metrics
-    metrics = DashboardMetrics.calculate_kpis(all_transactions, date_range)
+    with st.spinner("Calculating metrics..."):
+        metrics = DashboardMetrics.calculate_kpis(all_transactions, date_range)
     
     # --- ROW 1: The Vitals (KPI Cards) ---
     st.markdown("###") # Spacer

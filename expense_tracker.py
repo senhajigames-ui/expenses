@@ -104,7 +104,8 @@ def main():
             st.session_state.active_tab = 0
     
     # Load transactions for authenticated user
-    all_transactions = load_transactions()
+    with st.spinner("Loading your transactions..."):
+        all_transactions = load_transactions()
     transaction_count = len(all_transactions)
     
     # Render sidebar with navigation
