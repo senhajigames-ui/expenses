@@ -51,7 +51,16 @@ def add_transaction(
         result = supabase.table('transactions').insert(data).execute()
         return True
         
+    except ValueError as e:
+        logger.error(f"Validation error adding transaction: {e}")
+        st.error("❌ Please log in to save transactions.")
+        return False
     except Exception as e:
+        error_msg = str(e).lower()
+        if "network" in error_msg or "connection" in error_msg or "timeout" in error_msg:
+            st.error("🌐 Connection error. Please check your internet and try again.")
+        else:
+            st.error("❌ Could not save transaction. Please try again.")
         logger.error(f"Failed to add transaction: {e}")
         return False
 
@@ -73,7 +82,16 @@ def bulk_add_transactions(transactions: List[dict]) -> bool:
         result = supabase.table('transactions').insert(transactions).execute()
         return True
         
+    except ValueError as e:
+        logger.error(f"Validation error in bulk add: {e}")
+        st.error("❌ Please log in to import transactions.")
+        return False
     except Exception as e:
+        error_msg = str(e).lower()
+        if "network" in error_msg or "connection" in error_msg or "timeout" in error_msg:
+            st.error("🌐 Connection error during import. Please check your internet and try again.")
+        else:
+            st.error(f"❌ Import failed. {len(transactions)} transactions could not be saved.")
         logger.error(f"Failed to bulk add transactions: {e}")
         return False
 
@@ -109,6 +127,11 @@ def get_transactions(conn = None, start_date: Optional[str] = None, end_date: Op
         return df
         
     except Exception as e:
+        error_msg = str(e).lower()
+        if "network" in error_msg or "connection" in error_msg or "timeout" in error_msg:
+            st.error("🌐 Could not load transactions. Please check your internet connection.")
+        else:
+            st.error("❌ Error loading transactions. Please refresh the page.")
         logger.error(f"Failed to get transactions: {e}")
         return pd.DataFrame()
 
@@ -155,6 +178,7 @@ def check_duplicates(conn, transactions_df):
         
     except Exception as e:
         logger.error(f"Failed to check duplicates: {e}")
+        # Silent fail for duplicate check - doesn't block user
         return pd.DataFrame()
 
 
@@ -177,6 +201,11 @@ def delete_transaction(conn, transaction_id: int) -> bool:
         return len(result.data) > 0
         
     except Exception as e:
+        error_msg = str(e).lower()
+        if "network" in error_msg or "connection" in error_msg:
+            st.error("🌐 Connection error. Could not delete transaction.")
+        else:
+            st.error("❌ Could not delete transaction. Please try again.")
         logger.error(f"Failed to delete transaction: {e}")
         return False
 
@@ -199,6 +228,11 @@ def clear_all_transactions(conn) -> bool:
         return len(result.data) > 0
         
     except Exception as e:
+        error_msg = str(e).lower()
+        if "network" in error_msg or "connection" in error_msg:
+            st.error("🌐 Connection error. Could not clear transactions.")
+        else:
+            st.error("❌ Could not clear transactions. Please try again.")
         logger.error(f"Failed to clear transactions: {e}")
         return False
 
@@ -217,5 +251,10 @@ def update_transaction(transaction_id: int, updates: dict) -> bool:
         return len(result.data) > 0
         
     except Exception as e:
+        error_msg = str(e).lower()
+        if "network" in error_msg or "connection" in error_msg:
+            st.error("🌐 Connection error. Could not update transaction.")
+        else:
+            st.error("❌ Could not update transaction. Please try again.")
         logger.error(f"Failed to update transaction: {e}")
         return False
