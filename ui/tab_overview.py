@@ -101,6 +101,55 @@ class DashboardMetrics:
             
         return fixed.groupby('category')['amount'].sum().reset_index().sort_values('amount', ascending=False)
 
+    @staticmethod
+    def get_monthly_cashflow(transactions: pd.DataFrame) -> pd.DataFrame:
+        """Group transactions by month for income vs expenses."""
+        if transactions.empty:
+            return pd.DataFrame()
+            
+        df = transactions.copy()
+        # Ensure date_obj is datetime (it might be date)
+        df['date_temp'] = pd.to_datetime(df['date_obj'])
+        df['month_dt'] = df['date_temp'].dt.to_period('M').dt.to_timestamp()
+        
+        monthly = df.groupby(['month_dt', 'transaction_type'])['amount'].sum().unstack(fill_value=0)
+        monthly = monthly.reset_index()
+        
+        # Ensure columns exist and rename for clarity
+        if 'income' not in monthly.columns: monthly['income'] = 0.0
+        if 'expense' not in monthly.columns: monthly['expense'] = 0.0
+        
+        # Calculate Net
+        monthly['net'] = monthly['income'] - monthly['expense']
+        
+        return monthly.sort_values('month_dt')
+
+    @staticmethod
+    def calculate_budget_progress(transactions: pd.DataFrame, budgets: Dict[str, float]) -> pd.DataFrame:
+        """Calculate spending vs budget for each category."""
+        if not budgets or transactions.empty:
+            return pd.DataFrame()
+            
+        # Filter to expenses
+        expenses = transactions[transactions['transaction_type'] == 'expense']
+        
+        # Group by category
+        spending = expenses.groupby('category')['amount'].sum().reset_index()
+        
+        # Merge with budgets
+        spending['budget'] = spending['category'].map(budgets)
+        
+        # Filter only categories with budgets
+        budgeted = spending.dropna(subset=['budget']).copy()
+        
+        if budgeted.empty:
+            return pd.DataFrame()
+            
+        budgeted['percent'] = (budgeted['amount'] / budgeted['budget']) * 100
+        budgeted['remaining'] = budgeted['budget'] - budgeted['amount']
+        
+        return budgeted.sort_values('percent', ascending=False)
+
 
 class DashboardCharts:
     """Create modern Plotly charts for the dashboard."""
@@ -200,6 +249,120 @@ class DashboardCharts:
             xaxis=dict(showgrid=False, title=None),
             yaxis=dict(showgrid=True, gridcolor='lightgray', tickprefix="$"),
             showlegend=False
+        )
+        return fig
+
+    @staticmethod
+    def create_cashflow_chart(monthly_data: pd.DataFrame) -> go.Figure:
+        """Create grouped bar chart for Income vs Expenses wtih Net trend."""
+        if monthly_data.empty:
+            return None
+            
+        fig = go.Figure()
+        
+        # Income Bars
+        fig.add_trace(go.Bar(
+            x=monthly_data['month_dt'],
+            y=monthly_data['income'],
+            name='Income',
+            marker_color='#2ecc71',
+            text=[f"${x:,.0f}" for x in monthly_data['income']],
+            textposition='auto',
+            opacity=0.8
+        ))
+        
+        # Expense Bars
+        fig.add_trace(go.Bar(
+            x=monthly_data['month_dt'],
+            y=monthly_data['expense'],
+            name='Expenses',
+            marker_color='#e74c3c',
+            text=[f"${x:,.0f}" for x in monthly_data['expense']],
+            textposition='auto',
+            opacity=0.8
+        ))
+        
+        # Net Trend Line
+        fig.add_trace(go.Scatter(
+            x=monthly_data['month_dt'],
+            y=monthly_data['net'],
+            name='Net Savings',
+            line=dict(color='#2c3e50', width=3, dash='dot'),
+            mode='lines+markers'
+        ))
+        
+        fig.update_layout(
+            title="🌊 Cash Flow & Savings Trend",
+            barmode='group',
+            template="plotly_white",
+            height=400,
+            margin=dict(l=20, r=20, t=40, b=20),
+            xaxis=dict(
+                tickformat="%b %Y",
+                dtick="M1",
+                showgrid=False
+            ),
+            yaxis=dict(
+                showgrid=True, 
+                gridcolor='lightgray', 
+                tickprefix="$"
+            ),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            hovermode="x unified"
+        )
+        return fig
+
+    @staticmethod
+    def create_budget_progress_chart(progress_df: pd.DataFrame) -> go.Figure:
+        """Create horizontal bar chart for budget progress."""
+        if progress_df.empty:
+            return None
+            
+        # Color logic: Green < 80%, Yellow < 100%, Red >= 100%
+        colors = []
+        for pct in progress_df['percent']:
+            if pct >= 100:
+                colors.append('#e74c3c')  # Red
+            elif pct >= 80:
+                colors.append('#f1c40f')  # Yellow
+            else:
+                colors.append('#2ecc71')  # Green
+                
+        fig = go.Figure(go.Bar(
+            x=progress_df['amount'],
+            y=progress_df['category'],
+            orientation='h',
+            marker_color=colors,
+            text=[f"{p:.0f}%" for p in progress_df['percent']],
+            textposition='auto',
+            hovertemplate="<b>%{y}</b><br>Spent: $%{x:,.2f}<br>Budget: $%{customdata:,.2f}<extra></extra>",
+            customdata=progress_df['budget']
+        ))
+        
+        # Add Budget Line markers
+        fig.add_trace(go.Scatter(
+            x=progress_df['budget'],
+            y=progress_df['category'],
+            mode='markers',
+            marker=dict(symbol='line-ns-open', size=20, color='gray', line=dict(width=2)),
+            name='Budget Limit',
+            hoverinfo='skip'
+        ))
+        
+        fig.update_layout(
+            title="🎯 Budget Progress",
+            template="plotly_white",
+            showlegend=False,
+            height=max(300, len(progress_df) * 40),
+            margin=dict(l=20, r=20, t=40, b=20),
+            xaxis=dict(showgrid=True, gridcolor='lightgray', tickprefix="$"),
+            yaxis=dict(autorange="reversed") # Highest % at top
         )
         return fig
 
@@ -347,21 +510,56 @@ def render_overview_tab(conn, all_transactions: pd.DataFrame):
                 fig_fixed = DashboardCharts.create_fixed_costs_chart(fixed_data)
                 st.plotly_chart(fig_fixed, use_container_width=True, config={'displayModeBar': False})
             else:
-                # If no fixed costs, show the general donut
-                st.info("No fixed costs found (Rent, Utilities, etc.)")
+                # If no fixed costs, check for Budgets first
+                budgets = get_budgets(conn)
                 
-                # Fallback to general donut if no fixed costs
-                period_txns = all_transactions[
-                    (all_transactions['date_obj'] >= start_date) & 
-                    (all_transactions['date_obj'] <= end_date)
-                ]
-                fig_donut = DashboardCharts.create_category_donut(period_txns)
-                if fig_donut:
-                    st.plotly_chart(fig_donut, use_container_width=True, config={'displayModeBar': False})
+                # Filter txns for budget calculation - SHOULD use the selected view period
+                # But Budget usually implies "Monthly Budget".
+                # If view is "This Month", perfect. If "All Time", scaling is needed?
+                # User preference: "How much can I spend TODAY?". This implies current month context.
+                # Let's use the PASSED transactions (which are already filtered by date_range)
+                # But if date_range is "Last 3 Months", budget comparison is weird.
+                # DECISION: Proceed with filtered transactions. If user selects "This Month", it works perfectly.
+                
+                budget_status = DashboardMetrics.calculate_budget_progress(
+                    all_transactions[
+                        (all_transactions['date_obj'] >= start_date) & 
+                        (all_transactions['date_obj'] <= end_date)
+                    ], 
+                    budgets
+                )
+                
+                if not budget_status.empty:
+                    fig_budget = DashboardCharts.create_budget_progress_chart(budget_status)
+                    st.plotly_chart(fig_budget, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    # Fallback to Donut if no budgets set
+                    period_txns = all_transactions[
+                        (all_transactions['date_obj'] >= start_date) & 
+                        (all_transactions['date_obj'] <= end_date)
+                    ]
+                    fig_donut = DashboardCharts.create_category_donut(period_txns)
+                    if fig_donut:
+                        st.plotly_chart(fig_donut, use_container_width=True, config={'displayModeBar': False})
 
     with tab_cashflow:
-        # Simple Waterfall or Bar chart for Income vs Expense
-        st.caption("Cash flow visualization coming soon...")
+        # Cash Flow Chart
+        monthly_cf = DashboardMetrics.get_monthly_cashflow(all_transactions)
+        
+        if not monthly_cf.empty:
+            # Filter to last 12 months for better visibility
+            last_12_months = monthly_cf.tail(12)
+            fig_cf = DashboardCharts.create_cashflow_chart(last_12_months)
+            st.plotly_chart(fig_cf, use_container_width=True, config={'displayModeBar': False})
+            
+            # Summary metrics below chart
+            avg_savings = last_12_months['net'].mean()
+            col_cf1, col_cf2 = st.columns(2)
+            with col_cf1:
+                st.metric("Avg Monthly Savings (L12M)", f"${avg_savings:,.2f}", 
+                         delta="Based on last 12 months", delta_color="off")
+        else:
+            st.info("Not enough data for cash flow trends.")
         
     st.divider()
 
