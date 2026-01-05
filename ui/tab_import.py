@@ -212,13 +212,19 @@ class MultiFileImporter:
         # Create a placeholder for live updates
         status_placeholder = st.empty()
         
+        # Clean transactions for database insert (remove internal tracking fields)
+        db_transactions = []
+        for txn in all_transactions:
+            clean_txn = {k: v for k, v in txn.items() if not k.startswith('_')}
+            db_transactions.append(clean_txn)
+        
         # Use bulk insert for performance
         from database.transaction_operations import bulk_add_transactions
-        success = bulk_add_transactions(all_transactions)
+        success = bulk_add_transactions(db_transactions)
         
         # bulk_add_transactions returns bool, so count based on success
-        imported = len(all_transactions) if success else 0
-        skipped = 0 if success else len(all_transactions)
+        imported = len(db_transactions) if success else 0
+        skipped = 0 if success else len(db_transactions)
         
         # If successful, we need to attribute counts to files for history tracking
         if success:
