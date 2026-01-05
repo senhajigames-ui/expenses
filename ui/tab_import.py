@@ -143,13 +143,15 @@ class MultiFileImporter:
         # Step 2: Check duplicates
         st.markdown("### 🔍 Step 2: Checking for Duplicates")
         progress.update(0.30, f"🔍 Scanning {len(all_transactions)} transactions...")
-        duplicates = check_duplicates(self.conn, all_transactions)
+        duplicates = check_duplicates(None, all_transactions)
         
         duplicate_count = 0
-        if duplicates:
+        if not duplicates.empty:
             duplicate_count = len(duplicates)
             st.warning(f"⚠️ Found **{duplicate_count}** duplicate transactions (will skip)")
-            all_transactions = [t for t in all_transactions if t not in duplicates]
+            # Convert duplicates to list of dicts for comparison
+            dup_records = duplicates.to_dict('records') if hasattr(duplicates, 'to_dict') else []
+            all_transactions = [t for t in all_transactions if t not in dup_records]
         else:
             st.success(f"✅ No duplicates found - all {len(all_transactions)} transactions are new!")
         
