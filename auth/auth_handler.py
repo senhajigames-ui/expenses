@@ -146,7 +146,7 @@ def handle_authentication():
         return name, True, username, authenticator
     
     # Show login/register tabs
-    login_tab, register_tab = st.tabs(["🔐 Login", "📝 Register"])
+    login_tab, register_tab = st.tabs(["🔐 Login (v2 Verified)", "📝 Register"])
     
     with login_tab:
         # Show success message if just registered
