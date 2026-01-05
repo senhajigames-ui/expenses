@@ -54,8 +54,8 @@ class MultiFileImporter:
     """Handle multi-file transaction import workflow."""
     
     def __init__(self, conn):
-        self.conn = conn
-        self.custom_rules = load_merchant_rules(conn)
+        self.conn = conn  # Legacy - not used with Supabase
+        self.custom_rules = load_merchant_rules(None)
     
     def import_files(self, uploaded_files: List) -> Dict[str, int]:
         """
@@ -295,7 +295,7 @@ def render_import_tab(conn, all_transactions: pd.DataFrame):
     )
     
     if not uploaded_files:
-        _show_recent_imports(conn, all_transactions)
+        _show_recent_imports(all_transactions)
         return
     
     # Show file list
@@ -402,7 +402,7 @@ def render_import_tab(conn, all_transactions: pd.DataFrame):
             st.rerun()
 
 
-def _show_recent_imports(conn, all_transactions: pd.DataFrame):
+def _show_recent_imports(all_transactions: pd.DataFrame):
     """Show recent import statistics."""
     if all_transactions.empty:
         st.info("👋 **No transactions yet!**\n\nUpload one or more CSV files to get started.")
@@ -429,10 +429,10 @@ def _show_recent_imports(conn, all_transactions: pd.DataFrame):
     
     try:
         # Get import stats
-        stats = get_import_stats(conn)
+        stats = get_import_stats(None)
         
         # Get all imports for dropdown
-        all_imports = get_import_history(conn, limit=50)  # Last 50 files
+        all_imports = get_import_history(None, limit=50)  # Last 50 files
         
         # Transaction date info
         all_transactions['date_parsed'] = pd.to_datetime(all_transactions['date'])
