@@ -9,7 +9,9 @@ import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
 import bcrypt
+import re
 from database.supabase_client import set_user_session, clear_user_session, get_supabase_client
+from ui.auth_components import render_centered_auth_container, render_auth_header
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,20 +40,20 @@ def load_auth_config():
     except Exception as e:
         logger.warning(f"Could not load from secrets: {e}")
     
-    # Fall back to YAML file (local development)
-    try:
-        with open('auth_config.yaml') as file:
-            config = yaml.load(file, Loader=SafeLoader)
-        
-        # Override cookie name to ensure uniqueness and persistence
-        if 'cookie' in config:
-            config['cookie']['name'] = 'expense_tracker_session_safe'
-            
-        return config
     except Exception as e:
-        logger.error(f"Failed to load auth config: {e}")
-        st.error("Authentication configuration error. Check secrets or auth_config.yaml")
-        st.stop()
+        logger.warning(f"Could not load from secrets: {e}")
+    
+    # Default secure config (Supabase only mode)
+    # If no secrets provided, we create a structure that allows Supabase users to exist
+    return {
+        'credentials': {'usernames': {}},
+        'cookie': {
+            'name': 'expense_tracker_session_safe',
+            'key': 'some_random_signature_key_fallback',  # Ideally this should be in secrets
+            'expiry_days': 30
+        },
+        'pre-authorized': {'emails': []}
+    }
 
 
 @st.cache_data(ttl=300)
@@ -147,6 +149,11 @@ def handle_authentication():
     login_tab, register_tab = st.tabs(["🔐 Login", "📝 Register"])
     
     with login_tab:
+        # Show success message if just registered
+        if st.session_state.get('registration_success'):
+            st.success("🎉 Registration successful! Please login with your new credentials.")
+            st.session_state['registration_success'] = False
+        
         authenticator.login(location='main')
         
         name = st.session_state.get('name')
@@ -189,8 +196,12 @@ def handle_authentication():
                     errors.append("Please enter a valid email")
                 if not new_name:
                     errors.append("Please enter your name")
-                if not new_password or len(new_password) < 8:
-                    errors.append("Password must be at least 8 characters")
+                # Password Strength
+                # Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special
+                # Extended special chars to include - _ + = etc.
+                pw_regex = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>\-_+=]).{8,}$"
+                if not new_password or not re.match(pw_regex, new_password):
+                    errors.append("Password must have 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special char")
                 if new_password != new_password_confirm:
                     errors.append("Passwords do not match")
                     
@@ -210,8 +221,13 @@ def handle_authentication():
                     password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
                     
                     if save_user_to_supabase(new_username, new_email, new_name, password_hash):
-                        st.success("✅ Account created! Please go to the Login tab to sign in.")
                         st.balloons()
+                        # Clear the cached users so new user is available
+                        get_users_from_supabase.clear()
+                        # Set flag to show success message on login tab
+                        st.session_state['registration_success'] = True
+                        # Rerun to redirect to login tab (will show by default)
+                        st.rerun()
                     else:
                         st.error("❌ Failed to create account. Please try again.")
     

@@ -455,7 +455,7 @@ def _show_recent_imports(all_transactions: pd.DataFrame):
             try:
                 last_import_dt = datetime.fromisoformat(stats['last_import'])
                 col2.metric("🕐 Last Import", last_import_dt.strftime("%b %d, %Y"))  # Date only, no time
-            except:
+            except (ValueError, TypeError):
                 col2.metric("🕐 Last Import", "Recently")
         else:
             col2.metric("🕐 Last Import", "Never")

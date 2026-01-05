@@ -3,6 +3,7 @@ import os
 import logging
 from datetime import datetime
 from unittest.mock import MagicMock
+from pathlib import Path
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,10 @@ def load_secrets():
     secrets = {}
     current_section = None
     try:
-        with open(".streamlit/secrets.toml", "r") as f:
+        # Use absolute path based on script location
+        project_root = Path(__file__).parent.parent
+        secrets_path = project_root / ".streamlit" / "secrets.toml"
+        with open(secrets_path, "r") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -72,7 +76,11 @@ mock_st.cache_data = mock_cache_data
 # Inject into sys.modules
 sys.modules["streamlit"] = mock_st
 
-# 3. Import Database Modules (Now they use the mock)
+# 3. Add project root to Python path so imports work
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+# 4. Import Database Modules (Now they use the mock)
 try:
     from database.transaction_operations import add_transaction, get_transactions, delete_transaction
     from database.supabase_client import get_supabase_client, get_user_id

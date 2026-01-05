@@ -1,7 +1,7 @@
 """
 Database Operations Package
 
-This practice exposes all database interactions for the application.
+This package exposes all database interactions for the application.
 The backend is powered by Supabase.
 """
 

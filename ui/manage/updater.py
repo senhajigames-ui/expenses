@@ -13,7 +13,7 @@ This module handles all transaction update operations:
 import streamlit as st
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
-from logic.categorization import extract_merchant_name, auto_create_rule
+from logic.categorization import extract_merchant_name
 from config import (
     EXPENSE_CATEGORIES, INCOME_CATEGORIES, 
     TRANSFER_CATEGORIES, PAYMENT_CATEGORIES
@@ -270,12 +270,10 @@ class TransactionUpdater:
                         
                         # Create rule (only if category changed, as rules are category-based)
                         if category_changed:
-                            success, _ = auto_create_rule(
-                                self.conn, 
-                                description, 
-                                new_category
-                            )
-                            rule_created = success
+                            # Use save_merchant_rule (Supabase) instead of legacy auto_create_rule (SQLite)
+                            # merchant variable (Line 260) holds the cleaned name
+                            rule_success = save_merchant_rule(self.conn, merchant, new_category)
+                            rule_created = rule_success
             
             return {
                 'success': True,

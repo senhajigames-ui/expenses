@@ -89,5 +89,5 @@ def format_month(month_str):
     try:
         date_obj = datetime.strptime(month_str, "%Y-%m")
         return date_obj.strftime("%B %Y")
-    except:
+    except (ValueError, TypeError):
         return month_str
