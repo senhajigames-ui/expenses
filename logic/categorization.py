@@ -36,6 +36,13 @@ class CategorizationEngine:
             custom_rules: Dictionary of merchant -> category mappings from database
         """
         self.custom_rules = custom_rules or {}
+        
+        # Cache sorted merchant patterns for performance (sort once, not on every call)
+        self._sorted_patterns = sorted(
+            MERCHANT_PATTERNS.items(), 
+            key=lambda x: len(x[0]), 
+            reverse=True
+        )
     
     
     def categorize(
@@ -78,8 +85,13 @@ class CategorizationEngine:
         result = self._check_ws_tickers(desc_upper)
         if result:
             return result
+            
+        # Priority 5: Smart Fallback (Generic keywords)
+        result = self._check_smart_fallback(desc_upper)
+        if result:
+            return result
         
-        # Priority 5: Fallback
+        # Priority 6: Final Fallback
         return "Other", "expense"
     
     
@@ -113,11 +125,16 @@ class CategorizationEngine:
                 elif income_type == 'refund':
                     return "Income - Other", "income"
         
-        # INTERAC E-TRANSFER DETECTION
-        if "INTERAC" in desc_upper and "E-TRANSFER" in desc_upper:
-            if "RECEIVED" in desc_upper or "IN" in desc_upper or "FROM" in desc_upper:
+        # INTERAC E-TRANSFER DETECTION (handle various formats)
+        interac_keywords = ["INTERAC", "E-TRANSFER", "E-TRF", "ETRANSFER"]
+        if any(kw in desc_upper for kw in interac_keywords):
+            # Check direction
+            received_keywords = ["RECEIVED", "FROM", "RCVD", "DEPOSIT"]
+            sent_keywords = ["SENT", "OUT", "PAYMENT"]
+            
+            if any(kw in desc_upper for kw in received_keywords):
                 return "Other", "income"
-            elif "SENT" in desc_upper or "OUT" in desc_upper or "TO" in desc_upper:
+            elif any(kw in desc_upper for kw in sent_keywords):
                 return "Other", "expense"
         
         # TRANSFER DETECTION (money moving between your own accounts)
@@ -186,13 +203,11 @@ class CategorizationEngine:
     def _check_merchant_patterns(self, desc_upper: str) -> Optional[Tuple[str, str]]:
         """
         Check predefined merchant patterns.
-        Sorts patterns by length (descending) to match specific rules first.
+        Uses cached sorted patterns for performance.
         Example: Matches 'UBER EATS' (Dining) before 'UBER' (Transport).
         """
-        # Sort patterns by length descending to prioritize specific matches
-        sorted_patterns = sorted(MERCHANT_PATTERNS.items(), key=lambda x: len(x[0]), reverse=True)
-        
-        for pattern, category in sorted_patterns:
+        # Use pre-sorted cached patterns (sorted once in __init__)
+        for pattern, category in self._sorted_patterns:
             if pattern.upper() in desc_upper:
                 return category, self._get_transaction_type(category)
         
@@ -211,6 +226,45 @@ class CategorizationEngine:
 
     
     
+    def _check_smart_fallback(self, desc_upper: str) -> Optional[Tuple[str, str]]:
+        """
+        Smart fallback based generic generic keywords when no specific merchant matches.
+        """
+        keywords = {
+            "GROCERY": "Groceries",
+            "MARKET": "Groceries",
+            "FOOD": "Groceries",
+            "RESTAURANT": "Dining/Restaurants",
+            "CAFE": "Dining/Restaurants",
+            "COFFEE": "Dining/Restaurants",
+            "BAR": "Dining/Restaurants",
+            "PUB": "Dining/Restaurants",
+            "KITCHEN": "Dining/Restaurants",
+            "PIZZERIA": "Dining/Restaurants",
+            "GAS": "Gas/Fuel",
+            "FUEL": "Gas/Fuel",
+            "PETRO": "Gas/Fuel",
+            "PARKING": "Transportation",
+            "TRANSIT": "Transportation",
+            "TAXI": "Transportation",
+            "MOBILE": "Bills/Utilities",
+            "WIRELESS": "Bills/Utilities",
+            "HYDRO": "Utilities",
+            "ENERGY": "Utilities",
+            "PHARMACY": "Health/Wellness",
+            "DRUG": "Health/Wellness",
+            "FITNESS": "Health/Wellness",
+            "DONATION": "Donations/Charity",
+            "CHARITY": "Donations/Charity"
+        }
+        
+        for kw, category in keywords.items():
+            if kw in desc_upper:
+                return category, self._get_transaction_type(category)
+        
+        return None
+
+
     def _get_transaction_type(self, category: str) -> str:
         """Map category to transaction type."""
         if category in INCOME_CATEGORIES:
@@ -231,10 +285,23 @@ class MerchantExtractor:
         "POS", "PURCHASE", "#", "  "
     ]
     
+    # Common merchant abbreviations and variations
+    MERCHANT_ALIASES = {
+        "AMAZN": "AMAZON",
+        "AMZ": "AMAZON",
+        "MKTP": "MARKETPLACE",
+        "WM": "WALMART",
+        "CSTCO": "COSTCO",
+        "MCDONALDS": "MCDONALD",
+        "TIMS": "TIM HORTONS",
+        "SQ *": "SQUARE",  # Square payment processor
+        "TST*": "TOAST",   # Toast POS
+    }
+    
     @staticmethod
     def extract(description: str) -> str:
         """
-        Extract clean merchant name.
+        Extract clean merchant name with improved fuzzy matching.
         
         Args:
             description: Raw transaction description
@@ -243,6 +310,11 @@ class MerchantExtractor:
             Cleaned merchant name (1-3 words)
         """
         desc = description.upper().strip()
+        
+        # Normalize common aliases first
+        for abbrev, full_name in MerchantExtractor.MERCHANT_ALIASES.items():
+            if abbrev in desc:
+                desc = desc.replace(abbrev, full_name)
         
         # Remove noise
         for pattern in MerchantExtractor.NOISE_PATTERNS:
@@ -255,8 +327,10 @@ class MerchantExtractor:
             if not w.isdigit() and len(w) >= 2
         ]
         
-        # Return 1-3 words
-        if len(words) >= 2:
+        # Return 1-3 words (increased from 1-2 for better context)
+        if len(words) >= 3:
+            return " ".join(words[:3])
+        elif len(words) >= 2:
             return " ".join(words[:2])
         elif words:
             return words[0]
@@ -347,19 +421,18 @@ def batch_categorize_transactions(transactions, custom_rules):
     Returns:
         list of tuples (category, transaction_type)
     """
-    results = [None] * len(transactions)
+    # Create engine ONCE and reuse for all transactions (major performance improvement)
+    engine = CategorizationEngine(custom_rules)
+    results = []
     
-    # Process sequentially (Simple loop, no threading overhead)
-    for i, txn in enumerate(transactions):
+    for txn in transactions:
         desc = txn['description']
         amount = txn['amount']
         is_neg = txn.get('is_negative', False)
         txn_code = txn.get('transaction_code', '')
         
-        # Categorize
-        engine = CategorizationEngine(custom_rules)
+        # Categorize using shared engine instance
         res = engine.categorize(desc, amount, is_neg, txn_code)
-        
-        results[i] = res
+        results.append(res)
                 
     return results
