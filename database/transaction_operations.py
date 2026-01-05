@@ -87,6 +87,12 @@ def bulk_add_transactions(transactions: List[dict]) -> bool:
         st.error("❌ Please log in to import transactions.")
         return False
     except Exception as e:
+        st.error(f"❌ DEBUG: Import failed details: {str(e)}")  # Temporary debug
+        if hasattr(e, 'message'):
+             st.error(f"Supabase Message: {e.message}")
+        if hasattr(e, 'details'):
+             st.error(f"Supabase Details: {e.details}")
+             
         error_msg = str(e).lower()
         if "network" in error_msg or "connection" in error_msg or "timeout" in error_msg:
             st.error("🌐 Connection error during import. Please check your internet and try again.")

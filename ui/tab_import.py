@@ -217,7 +217,12 @@ class MultiFileImporter:
         for txn in all_transactions:
             clean_txn = {k: v for k, v in txn.items() if not k.startswith('_')}
             db_transactions.append(clean_txn)
-        
+            
+        # DEBUG: Show what we're trying to insert
+        st.write(f"DEBUG: Attempting to insert {len(db_transactions)} transactions")
+        if db_transactions:
+            st.write("First transaction sample:", db_transactions[0])
+            
         # Use bulk insert for performance
         from database.transaction_operations import bulk_add_transactions
         success = bulk_add_transactions(db_transactions)
