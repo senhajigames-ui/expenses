@@ -88,7 +88,7 @@ class MultiFileImporter:
             file.seek(0)  # Reset file pointer
             
             # Check if already imported
-            if check_file_already_imported(self.conn, file.name, file_hash):
+            if check_file_already_imported(file.name, file_hash):
                 st.warning(f"⚠️ **{file.name}**: Already imported (skipping)")
                 already_imported_files.append(file.name)
             else:
@@ -235,7 +235,7 @@ class MultiFileImporter:
         for file, file_hash in files_to_process:
             file_imported = file_imported_counts.get(file.name, 0)
             if file_imported > 0:
-                record_file_import(self.conn, file.name, file_hash, file_imported)
+                record_file_import(file.name, file_hash, file_imported)
         
         return {
             'imported': imported,
