@@ -52,60 +52,13 @@ class TransactionUpdater:
                 return
             
             # Initialize storage for this grid's initial state
-            initial_state_key = f'grid_initial_state_{grid_key}'
-            
-            # Get current IDs from display_df
-            current_ids = set()
-            if 'ID' in display_df:
-                # Handle potential non-numeric IDs safely
-                current_ids = set(pd.to_numeric(display_df['ID'], errors='coerce').dropna().astype(int))
-            
-            # Get stored IDs
-            stored_ids = set()
-            if initial_state_key in st.session_state:
-                stored_ids = set(st.session_state[initial_state_key].keys())
-            
-            # Re-initialize if keys don't match (filter changed) OR if key missing
-            if initial_state_key not in st.session_state or stored_ids != current_ids:
-                initial_state_dict = {}
-                try:
-                    for idx, row in display_df.iterrows():
-                        # Safely get ID
-                        if 'ID' not in row:
-                            continue
-                        
-                        try:
-                            txn_id = int(row['ID'])
-                        except (ValueError, TypeError):
-                            continue
-                        
-                        initial_state_dict[txn_id] = {
-                            'Type': str(row.get('Type', 'expense')),
-                            'Category': str(row.get('Category', 'Other'))
-                        }
-                    st.session_state[initial_state_key] = initial_state_dict
-                except Exception as e:
-                    st.error(f"Error initializing grid state: {e}")
-                    return
-            
-            # Check grid response validity
-            if not grid_response or not isinstance(grid_response, dict):
-                # AgGridReturn object - access via attributes
-                if hasattr(grid_response, 'data'):
-                    grid_data = grid_response.data
-                else:
-                    return
-            else:
-                # Dict format
-                if 'data' not in grid_response or grid_response['data'] is None:
-                    return
-                grid_data = grid_response['data']
+            initial_state_key = self._init_grid_state(grid_key, display_df)
+            if not initial_state_key:
+                return
 
             # Safely create DataFrame from grid data
-            try:
-                edited_data = pd.DataFrame(grid_data)
-            except Exception as e:
-                st.error(f"Error parsing grid data: {e}")
+            edited_data = self._get_grid_data(grid_response)
+            if edited_data is None:
                 return
             
             initial_state_dict = st.session_state.get(initial_state_key, {})
@@ -144,16 +97,10 @@ class TransactionUpdater:
                             new_type = current_type
                             new_category = current_category
                             
-                            # Validate category is not empty
-                            if not new_category or new_category.strip() == '':
-                                validation_errors.append(f"Transaction ID {txn_id}: Category cannot be empty")
-                                continue
-                            
-                            # Validate category matches type
-                            if not self._validate_category_type(new_category, new_type):
-                                validation_errors.append(
-                                    f"Transaction ID {txn_id}: Category '{new_category}' doesn't match type '{new_type}'"
-                                )
+                            # Validate change
+                            errors = self._validate_change(txn_id, new_category, new_type)
+                            if errors:
+                                validation_errors.extend(errors)
                                 continue
                             
                             # Get original transaction data safely
@@ -200,6 +147,79 @@ class TransactionUpdater:
             # Clear any partial state to prevent corruption
             if 'pending_changes' in st.session_state:
                 del st.session_state['pending_changes']
+
+    def _init_grid_state(self, grid_key: str, display_df: pd.DataFrame) -> Optional[str]:
+        """Initialize session state for grid tracking."""
+        initial_state_key = f'grid_initial_state_{grid_key}'
+            
+        # Get current IDs from display_df
+        current_ids = set()
+        if 'ID' in display_df:
+            # Handle potential non-numeric IDs safely
+            current_ids = set(pd.to_numeric(display_df['ID'], errors='coerce').dropna().astype(int))
+        
+        # Get stored IDs
+        stored_ids = set()
+        if initial_state_key in st.session_state:
+            stored_ids = set(st.session_state[initial_state_key].keys())
+        
+        # Re-initialize if keys don't match (filter changed) OR if key missing
+        if initial_state_key not in st.session_state or stored_ids != current_ids:
+            initial_state_dict = {}
+            try:
+                for idx, row in display_df.iterrows():
+                    # Safely get ID
+                    if 'ID' not in row:
+                        continue
+                    
+                    try:
+                        txn_id = int(row['ID'])
+                    except (ValueError, TypeError):
+                        continue
+                    
+                    initial_state_dict[txn_id] = {
+                        'Type': str(row.get('Type', 'expense')),
+                        'Category': str(row.get('Category', 'Other'))
+                    }
+                st.session_state[initial_state_key] = initial_state_dict
+            except Exception as e:
+                st.error(f"Error initializing grid state: {e}")
+                return None
+        return initial_state_key
+
+    def _get_grid_data(self, grid_response: Dict) -> Optional[pd.DataFrame]:
+        """Parse AG Grid data safely."""
+        if not grid_response or not isinstance(grid_response, dict):
+            # AgGridReturn object - access via attributes
+            if hasattr(grid_response, 'data'):
+                grid_data = grid_response.data
+            else:
+                return None
+        else:
+            # Dict format
+            if 'data' not in grid_response or grid_response['data'] is None:
+                return None
+            grid_data = grid_response['data']
+
+        try:
+            return pd.DataFrame(grid_data)
+        except Exception as e:
+            st.error(f"Error parsing grid data: {e}")
+            return None
+
+    def _validate_change(self, txn_id: int, new_category: str, new_type: str) -> List[str]:
+        """Validate a single transaction change."""
+        errors = []
+        # Validate category is not empty
+        if not new_category or new_category.strip() == '':
+            errors.append(f"Transaction ID {txn_id}: Category cannot be empty")
+        
+        # Validate category matches type
+        elif not self._validate_category_type(new_category, new_type):
+            errors.append(
+                f"Transaction ID {txn_id}: Category '{new_category}' doesn't match type '{new_type}'"
+            )
+        return errors
 
     
     def _update_transaction(
@@ -337,18 +357,28 @@ class TransactionUpdater:
         new_type: str
     ) -> List[Tuple]:
         """Find similar transactions using Supabase."""
-        from database.transaction_operations import get_transactions
+        from database.transaction_operations import search_transactions
         
-        # Get all transactions from Supabase
-        all_txns_df = get_transactions()
+        # Get candidates from Supabase using server-side search
+        # This replaces loading the entire database into memory!
+        candidates = search_transactions(merchant, exclude_id=exclude_id)
         
-        if all_txns_df.empty:
+        if not candidates:
             return []
+            
+        # Convert to DataFrame for compatibility with existing logic
+        filtered = pd.DataFrame(candidates)
         
-        # Filter out the current transaction and filter to non-matching categories/types
-        filtered = all_txns_df[
-            (all_txns_df['id'] != exclude_id) &
-            ((all_txns_df['category'] != new_category) | (all_txns_df['transaction_type'] != new_type))
+        # Determine which columns to use (search_transactions returns specific columns)
+        # Ensure we have the needed columns even if strict selection was used
+        required_cols = ['id', 'description', 'category', 'transaction_type', 'amount', 'date']
+        for col in required_cols:
+            if col not in filtered.columns:
+                filtered[col] = None
+
+        # Filter out matches that already have the target category/type
+        filtered = filtered[
+            ((filtered['category'] != new_category) | (filtered['transaction_type'] != new_type))
         ]
         
         similar = []

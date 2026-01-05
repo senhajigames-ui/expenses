@@ -136,6 +136,42 @@ def get_transactions(conn = None, start_date: Optional[str] = None, end_date: Op
         return pd.DataFrame()
 
 
+def search_transactions(query_text: str, exclude_id: Optional[int] = None, limit: int = 50) -> List[dict]:
+    """
+    Search transactions using server-side filtering.
+    Efficiently finds potential matches using Supabase ilike.
+    
+    Args:
+        query_text: Text to search for in description
+        exclude_id: ID to exclude from results (usually the current transaction)
+        limit: Max results to return
+    """
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return []
+            
+        supabase = get_supabase_client()
+        
+        # Build query
+        query = supabase.table('transactions') \
+            .select('id, description, category, transaction_type, amount, date') \
+            .eq('user_id', user_id) \
+            .ilike('description', f'%{query_text}%')
+            
+        if exclude_id:
+            query = query.neq('id', exclude_id)
+            
+        # Limit results for performance
+        result = query.limit(limit).execute()
+        
+        return result.data if result.data else []
+        
+    except Exception as e:
+        logger.error(f"Failed to search transactions: {e}")
+        return []
+
+
 def check_duplicates(conn, transactions_df):
     """
     Check for duplicate transactions.
