@@ -214,13 +214,14 @@ class MultiFileImporter:
         
         # Use bulk insert for performance
         from database.transaction_operations import bulk_add_transactions
-        success_count, fail_count = bulk_add_transactions(self.conn, all_transactions)
+        success = bulk_add_transactions(all_transactions)
         
-        imported = success_count
-        skipped = fail_count
+        # bulk_add_transactions returns bool, so count based on success
+        imported = len(all_transactions) if success else 0
+        skipped = 0 if success else len(all_transactions)
         
         # If successful, we need to attribute counts to files for history tracking
-        if success_count > 0:
+        if success:
             for txn in all_transactions:
                 source_file = txn.get('_source_file')
                 if source_file and source_file in file_imported_counts:
