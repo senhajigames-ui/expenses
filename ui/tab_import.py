@@ -213,15 +213,12 @@ class MultiFileImporter:
         status_placeholder = st.empty()
         
         # Clean transactions for database insert (remove internal tracking fields)
+        # Clean transactions for database insert (remove internal tracking fields)
         db_transactions = []
         for txn in all_transactions:
-            clean_txn = {k: v for k, v in txn.items() if not k.startswith('_')}
+            # Filter out internal fields and computed fields not in DB schema
+            clean_txn = {k: v for k, v in txn.items() if not k.startswith('_') and k != 'is_negative'}
             db_transactions.append(clean_txn)
-            
-        # DEBUG: Show what we're trying to insert
-        st.write(f"DEBUG: Attempting to insert {len(db_transactions)} transactions")
-        if db_transactions:
-            st.write("First transaction sample:", db_transactions[0])
             
         # Use bulk insert for performance
         from database.transaction_operations import bulk_add_transactions
