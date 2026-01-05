@@ -12,7 +12,6 @@ This module handles all transaction update operations:
 
 import streamlit as st
 import pandas as pd
-import sqlite3
 from typing import Dict, List, Tuple, Optional
 from logic.categorization import extract_merchant_name, auto_create_rule
 from config import (
@@ -212,7 +211,10 @@ class TransactionUpdater:
         type_changed: bool,
         exact_rule: bool = False
     ) -> Dict:
-        """Update a single transaction."""
+        """Update a single transaction using Supabase."""
+        from database.transaction_operations import update_transaction
+        from database.budget_operations import save_merchant_rule
+        
         new_type = str(edited_row['Type'])
         new_category = str(edited_row['Category'])
         
@@ -228,25 +230,16 @@ class TransactionUpdater:
             )
             return {'success': False}
         
-        # Update database
+        # Update database using Supabase
         try:
-            c = self.conn.cursor()
-            c.execute("""
-                UPDATE transactions 
-                SET category = ?, transaction_type = ? 
-                WHERE id = ?
-            """, (new_category, new_type, txn_id))
+            updates = {
+                'category': new_category,
+                'transaction_type': new_type
+            }
             
-            self.conn.commit()
+            success = update_transaction(txn_id, updates)
             
-            # Verify update
-            c.execute(
-                "SELECT category, transaction_type FROM transactions WHERE id = ?",
-                (txn_id,)
-            )
-            verify = c.fetchone()
-            
-            if not verify or verify[0] != new_category:
+            if not success:
                 return {'success': False}
             
             # Find similar transactions and create rule if category OR type changed
@@ -259,12 +252,8 @@ class TransactionUpdater:
                 if exact_rule:
                     # Create exact-match rule using full description
                     if category_changed:
-                        c.execute("""
-                            INSERT OR REPLACE INTO merchant_rules (merchant_pattern, category)
-                            VALUES (?, ?)
-                        """, (description, new_category))
-                        self.conn.commit()
-                        rule_created = True
+                        rule_success = save_merchant_rule(None, description, new_category)
+                        rule_created = rule_success
                         merchant = description  # Use full description as "merchant" for display
                 else:
                     # Create fuzzy rule using extracted merchant name
@@ -306,45 +295,24 @@ class TransactionUpdater:
     
     
     def _delete_transaction(self, txn_id: int) -> Dict:
-        """Delete a transaction with verification."""
+        """Delete a transaction using Supabase."""
+        from database.transaction_operations import delete_transaction
+        
         try:
             # Validate transaction ID
             if not txn_id or txn_id <= 0:
                 st.error("Invalid transaction ID")
                 return {'success': False}
             
-            c = self.conn.cursor()
+            # Delete using Supabase
+            success = delete_transaction(None, txn_id)
             
-            # Check if transaction exists
-            c.execute("SELECT id FROM transactions WHERE id = ?", (txn_id,))
-            exists = c.fetchone()
-            
-            if not exists:
-                st.error(f"Transaction {txn_id} not found")
-                return {'success': False}
-            
-            # Delete the transaction
-            c.execute("DELETE FROM transactions WHERE id = ?", (txn_id,))
-            self.conn.commit()
-            
-            # Verify deletion
-            c.execute("SELECT id FROM transactions WHERE id = ?", (txn_id,))
-            still_exists = c.fetchone()
-            
-            if still_exists:
-                st.error(f"Failed to delete transaction {txn_id} - still exists after deletion")
-                self.conn.rollback()
+            if not success:
+                st.error(f"Transaction {txn_id} not found or could not be deleted")
                 return {'success': False}
             
             return {'success': True}
             
-        except sqlite3.Error as e:
-            st.error(f"❌ Database error during deletion: {e}")
-            try:
-                self.conn.rollback()
-            except Exception:
-                pass
-            return {'success': False}
         except Exception as e:
             st.error(f"❌ Unexpected error during deletion: {e}")
             return {'success': False}
@@ -370,30 +338,40 @@ class TransactionUpdater:
         new_category: str,
         new_type: str
     ) -> List[Tuple]:
-        """Find similar transactions using improved fuzzy matching."""
-        c = self.conn.cursor()
+        """Find similar transactions using Supabase."""
+        from database.transaction_operations import get_transactions
         
-        # Get all transactions that might be similar
-        c.execute("""
-            SELECT id, description, category, transaction_type, amount, date
-            FROM transactions 
-            WHERE id != ?
-            AND (category != ? OR transaction_type != ?)
-        """, (exclude_id, new_category, new_type))
+        # Get all transactions from Supabase
+        all_txns_df = get_transactions()
         
-        all_txns = c.fetchall()
+        if all_txns_df.empty:
+            return []
+        
+        # Filter out the current transaction and filter to non-matching categories/types
+        filtered = all_txns_df[
+            (all_txns_df['id'] != exclude_id) &
+            ((all_txns_df['category'] != new_category) | (all_txns_df['transaction_type'] != new_type))
+        ]
+        
         similar = []
         
         # Use fuzzy matching to find similar descriptions
         merchant_lower = merchant.lower()
         
-        for txn in all_txns:
-            txn_id, description, category, txn_type, amount, date = txn
+        for _, row in filtered.iterrows():
+            description = str(row.get('description', ''))
             desc_lower = description.lower()
             
             # Check if merchant name is in description
             if merchant_lower in desc_lower:
-                similar.append((txn_id, description, category, txn_type, amount, date))
+                similar.append((
+                    row['id'], 
+                    description, 
+                    row.get('category', 'Other'), 
+                    row.get('transaction_type', 'expense'), 
+                    row.get('amount', 0), 
+                    row.get('date', '')
+                ))
                 continue
             
             # Check for partial word matches (e.g., "AMAZON" matches "AMAZON.CA")
@@ -402,7 +380,14 @@ class TransactionUpdater:
             
             # If 80% of merchant words are in description, consider it similar
             if merchant_words and len(merchant_words & desc_words) / len(merchant_words) >= 0.8:
-                similar.append((txn_id, description, category, txn_type, amount, date))
+                similar.append((
+                    row['id'], 
+                    description, 
+                    row.get('category', 'Other'), 
+                    row.get('transaction_type', 'expense'), 
+                    row.get('amount', 0), 
+                    row.get('date', '')
+                ))
         
         return similar
     
@@ -626,24 +611,19 @@ class TransactionUpdater:
         new_category: str,
         new_type: Optional[str] = None
     ):
-        """Execute bulk category/type update."""
-        c = self.conn.cursor()
+        """Execute bulk category/type update using Supabase."""
+        from database.transaction_operations import update_transaction
         
+        success_count = 0
         for txn in transactions:
             # Unpack tuple (id, description, category, type, amount, date)
             txn_id = txn[0]
             
+            updates = {'category': new_category}
             if new_type:
-                c.execute(
-                    "UPDATE transactions SET category = ?, transaction_type = ? WHERE id = ?",
-                    (new_category, new_type, txn_id)
-                )
-            else:
-                c.execute(
-                    "UPDATE transactions SET category = ? WHERE id = ?",
-                    (new_category, txn_id)
-                )
+                updates['transaction_type'] = new_type
+            
+            if update_transaction(txn_id, updates):
+                success_count += 1
         
-        self.conn.commit()
-        
-        st.success(f"✅ Updated {len(transactions)} similar transactions!")
+        st.success(f"✅ Updated {success_count} similar transactions!")

@@ -131,3 +131,51 @@ def save_merchant_rule(conn, merchant: str, category: str) -> bool:
     except Exception as e:
         logger.error(f"Error saving merchant rule: {e}")
         return False
+
+
+def delete_budget(conn, budget_id: int) -> bool:
+    """
+    Delete a budget from Supabase.
+    Args:
+        conn: Ignored
+        budget_id: Budget ID to delete
+    """
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        result = supabase.table('budgets').delete().eq('id', budget_id).eq('user_id', user_id).execute()
+        
+        # Clear cache
+        get_budgets.clear()
+        return len(result.data) > 0
+    except Exception as e:
+        logger.error(f"Error deleting budget: {e}")
+        st.error("❌ Could not delete budget. Please try again.")
+        return False
+
+
+def delete_merchant_rule(conn, merchant: str) -> bool:
+    """
+    Delete a merchant rule from Supabase.
+    Args:
+        conn: Ignored
+        merchant: Merchant pattern to delete
+    """
+    try:
+        user_id = get_user_id()
+        if not user_id:
+            return False
+            
+        supabase = get_supabase_client()
+        result = supabase.table('merchant_rules').delete().eq('merchant_pattern', merchant.upper()).eq('user_id', user_id).execute()
+        
+        # Clear cache
+        load_merchant_rules.clear()
+        return len(result.data) > 0
+    except Exception as e:
+        logger.error(f"Error deleting merchant rule: {e}")
+        st.error("❌ Could not delete rule. Please try again.")
+        return False

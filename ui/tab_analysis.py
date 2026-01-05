@@ -14,7 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from typing import Dict, List
-from database.budget_operations import get_budgets, save_budget, load_merchant_rules, save_merchant_rule
+from database.budget_operations import get_budgets, save_budget, load_merchant_rules, save_merchant_rule, delete_budget, delete_merchant_rule
 from config import EXPENSE_CATEGORIES, CURRENCY_SYMBOL
 
 
@@ -255,13 +255,11 @@ class BudgetManager:
                 st.warning("Budget amount must be greater than 0")
     
     def _delete_budget(self, budget_id: int):
-        """Delete a budget."""
-        try:
-            c = self.conn.cursor()
-            c.execute("DELETE FROM budgets WHERE id = ?", (budget_id,))
-            self.conn.commit()
-        except Exception as e:
-            st.error(f"Failed to delete budget: {e}")
+        """Delete a budget using Supabase."""
+        if delete_budget(None, budget_id):
+            st.success("✅ Budget deleted")
+        else:
+            st.error("Failed to delete budget")
 
 
 class MerchantRulesManager:
@@ -348,13 +346,11 @@ class MerchantRulesManager:
                 st.warning("Merchant name is required")
     
     def _delete_rule(self, merchant: str):
-        """Delete a merchant rule."""
-        try:
-            c = self.conn.cursor()
-            c.execute("DELETE FROM merchant_rules WHERE merchant_pattern = ?", (merchant,))
-            self.conn.commit()
-        except Exception as e:
-            st.error(f"Failed to delete rule: {e}")
+        """Delete a merchant rule using Supabase."""
+        if delete_merchant_rule(None, merchant):
+            st.success("✅ Rule deleted")
+        else:
+            st.error("Failed to delete rule")
 
 
 class TopSpenders:
