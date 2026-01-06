@@ -191,7 +191,7 @@ def handle_authentication():
                 new_password_confirm = st.text_input("Confirm Password", type="password")
                 
                 st.divider()
-                terms = st.checkbox("I agree to the Terms of Service & Privacy Policy")
+                terms = st.checkbox("I agree to the Terms of Service (jk nothing to agree to 😉)")
                 
                 submitted = st.form_submit_button("🚀 Create Account", use_container_width=True)
                 
@@ -219,7 +219,7 @@ def handle_authentication():
                         errors.append("Passwords do not match")
                     
                     if not terms:
-                        errors.append("You must agree to the Terms of Service")
+                        errors.append("You must agree (even though there's nothing to agree to!)")
                         
                     # Check if username exists
                     all_users = config['credentials'].get('usernames', {})

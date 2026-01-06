@@ -216,7 +216,6 @@ class DashboardCharts:
             
         fig.update_layout(
             title="📉 Variable Spending Trajectory",
-            template="plotly_white",
             hovermode="x unified",
             height=350,
             margin=dict(l=20, r=20, t=40, b=20),
@@ -242,7 +241,6 @@ class DashboardCharts:
         
         fig.update_layout(
             title="🔒 Recurring & Fixed Costs",
-            template="plotly_white",
             height=350,
             margin=dict(l=20, r=20, t=40, b=20),
             xaxis=dict(showgrid=False, title=None),
@@ -293,7 +291,6 @@ class DashboardCharts:
         fig.update_layout(
             title="🌊 Cash Flow & Savings Trend",
             barmode='group',
-            template="plotly_white",
             height=400,
             margin=dict(l=20, r=20, t=40, b=20),
             xaxis=dict(
@@ -356,7 +353,6 @@ class DashboardCharts:
         
         fig.update_layout(
             title="🎯 Budget Progress",
-            template="plotly_white",
             showlegend=False,
             height=max(300, len(progress_df) * 40),
             margin=dict(l=20, r=20, t=40, b=20),
