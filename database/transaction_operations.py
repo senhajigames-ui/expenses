@@ -176,6 +176,7 @@ def check_duplicates(conn, transactions_df):
     """
     Check for duplicate transactions.
     Args:
+    Args:
         conn: Ignored (legacy compatibility)
         transactions_df: DataFrame/List of transactions
     """
@@ -190,8 +191,17 @@ def check_duplicates(conn, transactions_df):
             
         supabase = get_supabase_client()
         
-        # Get existing transactions
-        existing = get_transactions()
+        # Optimize: Only fetch transactions within the date range of the import
+        # Add a small buffer (e.g., +/- 1 day) to handle timezone edge cases
+        if 'date' not in transactions_df.columns:
+            return pd.DataFrame()
+            
+        dates = pd.to_datetime(transactions_df['date'])
+        min_date = (dates.min() - pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+        max_date = (dates.max() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # Get existing transactions ONLY in this range
+        existing = get_transactions(start_date=min_date, end_date=max_date)
         
         if existing.empty:
             return pd.DataFrame() if isinstance(transactions_df, pd.DataFrame) else []
