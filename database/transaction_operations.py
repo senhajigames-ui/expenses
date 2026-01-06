@@ -98,11 +98,8 @@ def bulk_add_transactions(transactions: List[dict]) -> bool:
 
 def get_transactions(conn = None, start_date: Optional[str] = None, end_date: Optional[str] = None) -> pd.DataFrame:
     """
-    Get transactions from Supabase.
-    Args:
-        conn: Ignored (legacy compatibility)
-        start_date: Optional start date
-        end_date: Optional end date
+    Get transactions from Supabase with pagination support.
+    Bypasses the default 1000-row API limit.
     """
     try:
         user_id = get_user_id()
@@ -111,19 +108,39 @@ def get_transactions(conn = None, start_date: Optional[str] = None, end_date: Op
             
         supabase = get_supabase_client()
         
-        query = supabase.table('transactions').select("*").eq('user_id', user_id)
+        all_transactions = []
+        batch_size = 1000
+        offset = 0
         
-        if start_date:
-            query = query.gte('date', start_date)
-        if end_date:
-            query = query.lte('date', end_date)
+        while True:
+            # Build query
+            query = supabase.table('transactions').select("*").eq('user_id', user_id)
             
-        result = query.execute()
+            if start_date:
+                query = query.gte('date', start_date)
+            if end_date:
+                query = query.lte('date', end_date)
+            
+            # Add range/pagination
+            # Supabase uses .range(start, end) inclusive
+            batch_result = query.range(offset, offset + batch_size - 1).execute()
+            
+            if not batch_result.data:
+                break
+                
+            all_transactions.extend(batch_result.data)
+            
+            # If we got fewer rows than the batch size, we're done
+            if len(batch_result.data) < batch_size:
+                break
+                
+            # Move to next batch
+            offset += batch_size
         
-        if not result.data:
+        if not all_transactions:
             return pd.DataFrame()
             
-        df = pd.DataFrame(result.data)
+        df = pd.DataFrame(all_transactions)
         return df
         
     except Exception as e:
