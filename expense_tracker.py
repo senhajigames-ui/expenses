@@ -12,6 +12,7 @@ Architecture:
 
 import streamlit as st
 import pandas as pd
+from datetime import datetime, timedelta
 
 # Authentication
 from auth.auth_handler import handle_authentication
@@ -37,11 +38,20 @@ def initialize_app() -> None:
     )
 
 
-def load_transactions() -> pd.DataFrame:
-    """Load all transactions from Supabase."""
+def load_transactions(load_all: bool = False) -> pd.DataFrame:
+    """
+    Load transactions from Supabase.
+    Args:
+        load_all: If True, load entire history. If False, load last 12 months.
+    """
     try:
+        start_date = None
+        if not load_all:
+            # Default to last 365 days (~1 year)
+            start_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+            
         # get_transactions routes to Supabase when authenticated
-        df = get_transactions(None)  # conn not needed for Supabase
+        df = get_transactions(start_date=start_date)
         
         if df.empty:
             return df
@@ -95,6 +105,14 @@ def main():
     # Welcome message
     st.sidebar.success(f'Welcome **{name}**!')
     
+    # Data Loading Controls
+    st.sidebar.markdown("### Data Settings")
+    load_all = st.sidebar.checkbox(
+        "Load Full History", 
+        value=False,
+        help="Uncheck to load only last 12 months (Faster)"
+    )
+    
     # Restore tab from query params
     query_params = st.query_params
     if 'tab' in query_params and 'active_tab' not in st.session_state:
@@ -105,7 +123,7 @@ def main():
     
     # Load transactions for authenticated user
     with st.spinner("Loading your transactions..."):
-        all_transactions = load_transactions()
+        all_transactions = load_transactions(load_all=load_all)
     transaction_count = len(all_transactions)
     
     # Render sidebar with navigation
