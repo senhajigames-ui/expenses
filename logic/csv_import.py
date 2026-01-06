@@ -24,24 +24,40 @@ def detect_csv_format(df, filename):
     filename_upper = filename.upper()
     
     # Create lowercase column mapping for case-insensitive matching
-    col_lower_map = {col.lower(): col for col in df.columns}
+    # Create lowercase column mapping for case-insensitive matching
+    col_lower_map = {}
+    for col in df.columns:
+        lower_col = col.lower()
+        col_lower_map[lower_col] = col
+        # Add aliases
+        if lower_col == "transaction date":
+            col_lower_map["date"] = col
+        elif lower_col == "description 1":
+            col_lower_map["description"] = col
+        elif lower_col == "cad$":
+            col_lower_map["amount"] = col
+    
     
     # Check most specific formats first!
     
     # RBC Checking format (MOST SPECIFIC - has 'transaction' column)
     if "transaction" in col_lower_map and "description" in col_lower_map and "amount" in col_lower_map and "date" in col_lower_map:
-        return "checking", "Checking", col_lower_map["date"], col_lower_map["description"], col_lower_map["amount"], col_lower_map["transaction"]
+        # RBC Checking is typically MM/DD/YYYY
+        return "checking", "Checking", col_lower_map["date"], col_lower_map["description"], col_lower_map["amount"], col_lower_map["transaction"], "%m/%d/%Y"
     
     # WealthSimple format (SPECIFIC - has 'transaction_date' and 'type')
     elif "transaction_date" in col_lower_map and "details" in col_lower_map and "amount" in col_lower_map and "type" in col_lower_map:
-        return "wealthsimple", "WealthSimple", col_lower_map["transaction_date"], col_lower_map["details"], col_lower_map["amount"], col_lower_map["type"]
+        # WealthSimple is YYYY-MM-DD
+        return "wealthsimple", "WealthSimple", col_lower_map["transaction_date"], col_lower_map["details"], col_lower_map["amount"], col_lower_map["type"], "%Y-%m-%d"
     
     # RBC Credit Card format (GENERIC - only has basic columns)
     elif "description" in col_lower_map and "amount" in col_lower_map and "date" in col_lower_map:
         card_type = "Cobalt" if "AMEX" in filename_upper or "COBALT" in filename_upper else "Visa"
-        return "creditcard", card_type, col_lower_map["date"], col_lower_map["description"], col_lower_map["amount"], None
+        # RBC Credit is typically MM/DD/YYYY or YYYY-MM-DD depending on user settings, but MM/DD/YYYY is standard download
+        # If ambiguous, we default to MM/DD/YYYY (US/Canada standard)
+        return "creditcard", card_type, col_lower_map["date"], col_lower_map["description"], col_lower_map["amount"], None, "%m/%d/%Y"
     
-    return None, None, None, None, None, None
+    return None, None, None, None, None, None, None
 
 
 def parse_csv_transactions(uploaded_file, custom_rules=None):
@@ -67,7 +83,7 @@ def parse_csv_transactions(uploaded_file, custom_rules=None):
     filename = uploaded_file.name.upper()
     
     # Detect format
-    csv_type, card_type, date_col, desc_col, amount_col, txn_code_col = detect_csv_format(df, filename)
+    csv_type, card_type, date_col, desc_col, amount_col, txn_code_col, date_fmt = detect_csv_format(df, filename)
     
     if not csv_type:
         st.error("Unknown CSV format")
@@ -86,9 +102,28 @@ def parse_csv_transactions(uploaded_file, custom_rules=None):
         try:
             amount_raw = float(str(row[amount_col]).replace('$', '').replace(',', '').strip())
             
-            # Parse date
-            formatted_date = pd.to_datetime(row[date_col]).strftime("%Y-%m-%d")
-            month = pd.to_datetime(row[date_col]).strftime("%Y-%m")
+            # Parse date safely with explicit format if available
+            try:
+                if date_fmt:
+                    dt_obj = pd.to_datetime(row[date_col], format=date_fmt)
+                else:
+                    # Fallback to smart parsing (preferring Month-First for North America)
+                    dt_obj = pd.to_datetime(row[date_col], dayfirst=False)
+                    
+                formatted_date = dt_obj.strftime("%Y-%m-%d")
+                month = dt_obj.strftime("%Y-%m")
+            except Exception as e:
+                # If Strict parsing fails, try fallback
+                if date_fmt:
+                    try:
+                         # Retry without strict format (maybe user has different settings)
+                         dt_obj = pd.to_datetime(row[date_col], dayfirst=False)
+                         formatted_date = dt_obj.strftime("%Y-%m-%d")
+                         month = dt_obj.strftime("%Y-%m")
+                    except:
+                        continue
+                else:
+                    continue
             
             description = str(row[desc_col]).strip()
             is_negative = amount_raw < 0

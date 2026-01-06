@@ -338,52 +338,7 @@ class MerchantExtractor:
         return description.strip()
 
 
-class RuleManager:
-    """Manage merchant categorization rules."""
-    
-    @staticmethod
-    def create_rule(conn, description: str, category: str) -> Tuple[bool, Optional[str]]:
-        """
-        Create a merchant rule from a transaction.
-        
-        Args:
-            conn: Database connection
-            description: Transaction description
-            category: Category to assign
-        
-        Returns:
-            Tuple of (success, merchant_name)
-        """
-        merchant = MerchantExtractor.extract(description)
-        
-        if not merchant or len(merchant) < 2:
-            return False, None
-        
-        try:
-            c = conn.cursor()
-            
-            # Check if exists
-            c.execute(
-                "SELECT category FROM merchant_rules WHERE LOWER(merchant_pattern) = LOWER(?)",
-                (merchant,)
-            )
-            existing = c.fetchone()
-            
-            if existing and existing[0] == category:
-                return False, merchant  # Already exists
-            
-            # Insert or update
-            c.execute("""
-                INSERT OR REPLACE INTO merchant_rules (merchant_pattern, category)
-                VALUES (?, ?)
-            """, (merchant, category))
-            
-            conn.commit()
-            return True, merchant
-        
-        except Exception as e:
-            logger.warning(f"Failed to create rule: {e}")
-            return False, None
+
 
 
 # Public API Functions (for backwards compatibility)
@@ -405,9 +360,7 @@ def extract_merchant_name(description: str) -> str:
     return MerchantExtractor.extract(description)
 
 
-def auto_create_rule(conn, description: str, category: str) -> Tuple[bool, Optional[str]]:
-    """Legacy function for backwards compatibility."""
-    return RuleManager.create_rule(conn, description, category)
+
 
 
 def batch_categorize_transactions(transactions, custom_rules):

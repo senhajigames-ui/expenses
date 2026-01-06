@@ -9,10 +9,8 @@ This package contains core business logic:
 from .categorization import (
     CategorizationEngine,
     MerchantExtractor,
-    RuleManager,
     categorize_transaction_unified,
     extract_merchant_name,
-    auto_create_rule,
     batch_categorize_transactions
 )
 from .csv_import import (
@@ -25,10 +23,8 @@ __all__ = [
     # Categorization
     'CategorizationEngine',
     'MerchantExtractor',
-    'RuleManager',
     'categorize_transaction_unified',
     'extract_merchant_name',
-    'auto_create_rule',
     'batch_categorize_transactions',
     # CSV Import
     'detect_csv_format',
