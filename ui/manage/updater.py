@@ -27,185 +27,104 @@ class TransactionUpdater:
         """Initialize with database connection."""
         self.conn = conn
     
-    def process_aggrid_changes(
+    def process_data_editor_changes(
         self,
         original_df: pd.DataFrame,
         display_df: pd.DataFrame,
-        grid_response: Dict,
+        editor_state: Dict,
         grid_key: str = "main"
     ):
         """
-        Track changes from AG Grid without auto-saving.
+        Process changes from st.data_editor.
         
         Args:
             original_df: The original DataFrame (with 'id', 'description', etc.)
-            display_df: The DataFrame currently displayed in the grid
-            grid_response: The response object from AG Grid
-            grid_key: Unique key for this grid (to track multiple grids)
+            display_df: The DataFrame currently displayed (must align with editor rows)
+            editor_state: The session state output from data_editor (edited_rows, etc.)
+            grid_key: Unique key for tracking changes
         """
         try:
-            # Validate inputs
-            if original_df is None or original_df.empty:
-                return
-            
-            if display_df is None or display_df.empty:
-                return
-            
-            # Initialize storage for this grid's initial state
-            initial_state_key = self._init_grid_state(grid_key, display_df)
-            if not initial_state_key:
+            if not editor_state or 'edited_rows' not in editor_state:
                 return
 
-            # Safely create DataFrame from grid data
-            edited_data = self._get_grid_data(grid_response)
-            if edited_data is None:
+            edited_rows = editor_state['edited_rows']
+            if not edited_rows:
                 return
+
+            pending_changes = []
             
-            initial_state_dict = st.session_state.get(initial_state_key, {})
+            # Helper to get original transaction ID from display row index
+            # NOTE: usage of reset_index(drop=True) in display logic is assumed!
+            # display_df index must match editor row index.
             
-            # Compare with initial state to detect changes
-            if not edited_data.empty:
-                pending_changes = []
-                validation_errors = []
-                
-                for idx, edited_row in edited_data.iterrows():
-                    try:
-                        # Safely get transaction ID
-                        if 'ID' not in edited_row:
-                            continue
-                        
-                        try:
-                            txn_id = int(edited_row['ID'])
-                        except (ValueError, TypeError):
-                            continue
-                        
-                        # Get initial state for this transaction
-                        if txn_id not in initial_state_dict:
-                            continue
-                        
-                        initial_state = initial_state_dict[txn_id]
-                        
-                        # Safely get current values
-                        current_type = str(edited_row.get('Type', 'expense'))
-                        current_category = str(edited_row.get('Category', 'Other'))
-                        
-                        # Check for changes against initial state
-                        type_changed = initial_state['Type'] != current_type
-                        category_changed = initial_state['Category'] != current_category
-                        
-                        if type_changed or category_changed:
-                            new_type = current_type
-                            new_category = current_category
-                            
-                            # Validate change
-                            errors = self._validate_change(txn_id, new_category, new_type)
-                            if errors:
-                                validation_errors.extend(errors)
-                                continue
-                            
-                            # Get original transaction data safely
-                            try:
-                                matching_txns = original_df[original_df['id'] == txn_id]
-                                if matching_txns.empty:
-                                    st.warning(f"Transaction {txn_id} not found in original data")
-                                    continue
-                                
-                                orig_txn = matching_txns.iloc[0]
-                                description = str(orig_txn.get('description', ''))
-                                
-                            except Exception as e:
-                                st.error(f"Error retrieving transaction {txn_id}: {e}")
-                                continue
-                            
-                            pending_changes.append({
-                                'txn_id': txn_id,
-                                'description': description,
-                                'new_type': new_type,
-                                'new_category': new_category,
-                                'type_changed': type_changed,
-                                'category_changed': category_changed,
-                                'grid_key': grid_key
-                            })
+            for row_idx, changes in edited_rows.items():
+                try:
+                    row_idx = int(row_idx)
                     
-                    except Exception as e:
-                        st.error(f"Error processing row {idx}: {e}")
+                    if row_idx >= len(display_df):
+                        st.warning(f"Row {row_idx} out of bounds")
                         continue
+                        
+                    # Get ID from display DF (it has 'ID' column, even if hidden)
+                    if 'ID' not in display_df.columns:
+                        st.error("Display data missing ID column")
+                        return
+                        
+                    txn_id = int(display_df.iloc[row_idx]['ID'])
+                    
+                    # Get current display values to fill in gaps if multiple cols edited?
+                    # Actually data_editor sends delta.
+                    
+                    # Get original transaction data
+                    matching_txns = original_df[original_df['id'] == txn_id]
+                    if matching_txns.empty:
+                        continue
+                    orig_txn = matching_txns.iloc[0]
+                    description = str(orig_txn.get('description', ''))
+                    
+                    # Determine what changed
+                    # Default to current value if not in changes
+                    current_type = str(orig_txn.get('transaction_type', 'expense'))
+                    current_category = str(orig_txn.get('category', 'Other'))
+                    
+                    # Updates from editor
+                    new_type = changes.get('Type', current_type)
+                    new_category = changes.get('Category', current_category)
+                    
+                    type_changed = 'Type' in changes and new_type != current_type
+                    category_changed = 'Category' in changes and new_category != current_category
+                    
+                    if type_changed or category_changed:
+                         # Validate change
+                        errors = self._validate_change(txn_id, new_category, new_type)
+                        if errors:
+                            for err in errors:
+                                st.error(f"⚠️ {err}")
+                            continue
+
+                        pending_changes.append({
+                            'txn_id': txn_id,
+                            'description': description,
+                            'new_type': new_type,
+                            'new_category': new_category,
+                            'type_changed': type_changed,
+                            'category_changed': category_changed,
+                            'grid_key': grid_key
+                        })
                 
-                # Show validation errors if any
-                if validation_errors:
-                    for error in validation_errors:
-                        st.error(f"⚠️ {error}")
+                except Exception as e:
+                    st.error(f"Error processing row {row_idx}: {e}")
+                    continue
+            
+            # Update session state with pending changes
+            if pending_changes:
+                # Append to existing changes if any? No, usually we replace or accumulate.
+                # Let's replace for simplicity of state management, user saves explicitly.
+                st.session_state['pending_changes'] = pending_changes
                 
-                # Store pending changes in session state
-                if pending_changes:
-                    st.session_state['pending_changes'] = pending_changes
-                elif 'pending_changes' in st.session_state:
-                    del st.session_state['pending_changes']
-        
         except Exception as e:
-            st.error(f"Critical error in process_aggrid_changes: {e}")
-            # Clear any partial state to prevent corruption
-            if 'pending_changes' in st.session_state:
-                del st.session_state['pending_changes']
+            st.error(f"Error processing editor changes: {e}")
 
-    def _init_grid_state(self, grid_key: str, display_df: pd.DataFrame) -> Optional[str]:
-        """Initialize session state for grid tracking."""
-        initial_state_key = f'grid_initial_state_{grid_key}'
-            
-        # Get current IDs from display_df
-        current_ids = set()
-        if 'ID' in display_df:
-            # Handle potential non-numeric IDs safely
-            current_ids = set(pd.to_numeric(display_df['ID'], errors='coerce').dropna().astype(int))
-        
-        # Get stored IDs
-        stored_ids = set()
-        if initial_state_key in st.session_state:
-            stored_ids = set(st.session_state[initial_state_key].keys())
-        
-        # Re-initialize if keys don't match (filter changed) OR if key missing
-        if initial_state_key not in st.session_state or stored_ids != current_ids:
-            initial_state_dict = {}
-            try:
-                for idx, row in display_df.iterrows():
-                    # Safely get ID
-                    if 'ID' not in row:
-                        continue
-                    
-                    try:
-                        txn_id = int(row['ID'])
-                    except (ValueError, TypeError):
-                        continue
-                    
-                    initial_state_dict[txn_id] = {
-                        'Type': str(row.get('Type', 'expense')),
-                        'Category': str(row.get('Category', 'Other'))
-                    }
-                st.session_state[initial_state_key] = initial_state_dict
-            except Exception as e:
-                st.error(f"Error initializing grid state: {e}")
-                return None
-        return initial_state_key
-
-    def _get_grid_data(self, grid_response: Dict) -> Optional[pd.DataFrame]:
-        """Parse AG Grid data safely."""
-        if not grid_response or not isinstance(grid_response, dict):
-            # AgGridReturn object - access via attributes
-            if hasattr(grid_response, 'data'):
-                grid_data = grid_response.data
-            else:
-                return None
-        else:
-            # Dict format
-            if 'data' not in grid_response or grid_response['data'] is None:
-                return None
-            grid_data = grid_response['data']
-
-        try:
-            return pd.DataFrame(grid_data)
-        except Exception as e:
-            st.error(f"Error parsing grid data: {e}")
-            return None
 
     def _validate_change(self, txn_id: int, new_category: str, new_type: str) -> List[str]:
         """Validate a single transaction change."""

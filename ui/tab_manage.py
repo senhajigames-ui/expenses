@@ -11,9 +11,11 @@ The actual logic has been split into focused modules:
 import streamlit as st
 import pandas as pd
 from ui.manage import TransactionFilter, TransactionUpdater
-from ui.manage.components import prepare_aggrid_data
-from ui.aggrid_table import render_aggrid_table
-
+from ui.manage.components import prepare_table_data
+from config import (
+    EXPENSE_CATEGORIES, INCOME_CATEGORIES, 
+    TRANSFER_CATEGORIES, PAYMENT_CATEGORIES
+)
 
 def render_manage_tab(conn, all_transactions: pd.DataFrame):
     """
@@ -55,7 +57,6 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
         return
         
     # Separate Transfer transactions from the common filtered set
-    # This ensures they are always visible regardless of Type/Category selection
     transfer_mask = common_filtered['transaction_type'] == 'transfer'
     all_transfers = common_filtered[transfer_mask].copy()
     
@@ -81,9 +82,6 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
         main_filtered = main_filtered[main_filtered['category'] == category]
         
     # Exclude transfers from main table unless explicitly selected
-    # If user selects "Transfers" type, they show up in main table AND bottom section (which is fine)
-    # But if user selects "All" or "Expenses", we usually want to hide transfers from main table
-    # to keep it clean, since they have their own section.
     if type_filter != 'Transfers':
         main_transactions = main_filtered[main_filtered['transaction_type'] != 'transfer'].copy()
     else:
@@ -104,43 +102,80 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
         f"### {title_emoji.get(type_filter, '📋')} {title_text} ({len(main_transactions)})"
     )
     
-    st.caption("💡 **Tip:** Click any cell to edit • Changes save automatically • Sort by clicking column headers")
+    st.caption("💡 **Tip:** Edit directly in the table below. Changes are saved when you click 'Save'.")
     
-    # Prepare data for AG Grid
+    # Prepare data using existing helper (returns ID, Date, Description, Amount, Type, Category, Card)
+    # We rename 'prepare_aggrid_data' conceptually to 'prepare_table_data' but reuse the function
     with st.spinner("Loading transactions..."):
-        aggrid_df = main_transactions.copy()
-        aggrid_df = aggrid_df.sort_values('date', ascending=False)
-        
-        # Format for display
-        display_df = prepare_aggrid_data(aggrid_df)
+        # Reset index to ensure 0..N sequence matching data_editor rows
+        aggrid_df = main_transactions.copy().sort_values('date', ascending=False)
+        display_df = prepare_table_data(aggrid_df).reset_index(drop=True)
     
-    # Render AG Grid
-    grid_response = render_aggrid_table(display_df, key="main_aggrid")
+    # Combine all categories for the dropdown
+    all_categories = sorted(list(set(
+        EXPENSE_CATEGORIES + INCOME_CATEGORIES + TRANSFER_CATEGORIES + PAYMENT_CATEGORIES + ["Other"]
+    )))
+
+    # Configure columns for st.data_editor
+    column_config = {
+        "ID": None,  # Hide ID column
+        "Date": st.column_config.TextColumn("📅 Date", disabled=True),
+        "Description": st.column_config.TextColumn("📝 Description", disabled=True),
+        "Amount": st.column_config.TextColumn("💰 Amount", disabled=True),
+        "Card": st.column_config.TextColumn("💳 Card", disabled=True),
+        "Type": st.column_config.SelectboxColumn(
+            "✏️ Type",
+            options=['expense', 'income', 'transfer', 'payment'],
+            required=True
+        ),
+        "Category": st.column_config.SelectboxColumn(
+            "✏️ Category",
+            options=all_categories,
+            required=True
+        )
+    }
+
+    # Render Native Data Editor
+    # Key must be unique to prevent state conflicts
+    editor_state = st.data_editor(
+        display_df,
+        column_config=column_config,
+        hide_index=True,
+        use_container_width=True,
+        num_rows="fixed",
+        key="main_editor"
+    )
     
-    # Process changes for main table (tracks in session state)
-    updater.process_aggrid_changes(aggrid_df, display_df, grid_response)
+    # Process changes
+    updater.process_data_editor_changes(aggrid_df, display_df, editor_state, grid_key="main")
     
-    # Render minimal action buttons below the table
+    # Render action buttons
     st.divider()
     updater.render_action_buttons()
     
-    # Show Transfer transactions separately - ALWAYS show, but collapsed by default
+    # Show Transfer transactions separately
     st.divider()
     
     with st.expander(f"↔️ Transfers ({len(all_transfers)})", expanded=False):
         if not all_transfers.empty:
-            st.caption("TFSA/FHSA contributions, Morocco, and other transfers shown separately")
+            st.caption("TFSA/FHSA contributions, Morocco, and other transfers")
             
             # Prepare transfer data
-            transfer_aggrid_df = all_transfers.copy()
-            transfer_aggrid_df = transfer_aggrid_df.sort_values('date', ascending=False)
-            transfer_display_df = prepare_aggrid_data(transfer_aggrid_df)
+            transfer_df = all_transfers.copy().sort_values('date', ascending=False)
+            transfer_display = prepare_table_data(transfer_df).reset_index(drop=True)
             
-            # Render transfers table using AG Grid
-            transfer_grid_response = render_aggrid_table(transfer_display_df, key="transfer_aggrid")
+            # Render transfers editor
+            transfer_editor_state = st.data_editor(
+                transfer_display,
+                column_config=column_config,
+                hide_index=True,
+                use_container_width=True,
+                num_rows="fixed",
+                key="transfer_editor"
+            )
             
-            # Process changes for transfers table
-            updater.process_aggrid_changes(transfer_aggrid_df, transfer_display_df, transfer_grid_response)
+            # Process changes
+            updater.process_data_editor_changes(transfer_df, transfer_display, transfer_editor_state, grid_key="transfer")
         else:
             st.info("No transfer transactions found")
     
@@ -159,7 +194,7 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
                 min_value=1,
                 step=1,
                 key="delete_transaction_id",
-                help="Find the ID in the first column of the table above"
+                help="Enter the ID of the transaction to delete"
             )
         
         with col2:
@@ -174,7 +209,7 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
                         st.success(f"✅ Deleted transaction ID {delete_id}")
                         st.rerun()
                     else:
-                        st.warning(f"⚠️ Transaction ID {delete_id} not found or could not be deleted")
+                        st.warning(f"⚠️ ID {delete_id} not found")
         
         # Delete all transactions
         st.divider()
@@ -192,15 +227,10 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
                 if st.button("✅ Yes, Delete Everything", type="primary", width="stretch", key="confirm_delete_all_yes"):
                     try:
                         from database.transaction_operations import clear_all_transactions
-                        
-                        # Use the proper function that routes to Supabase when appropriate
                         success = clear_all_transactions(conn)
-                        
                         if success:
-                            # Also clear import history so files can be re-imported
                             clear_import_history(conn)
-                            
-                            st.success("✅ Deleted all transactions and cleared import history!")
+                            st.success("✅ Deleted all transactions!")
                             st.session_state.confirm_delete_all = False
                             st.rerun()
                         else:

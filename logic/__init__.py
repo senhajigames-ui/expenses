@@ -15,8 +15,7 @@ from .categorization import (
 )
 from .csv_import import (
     detect_csv_format,
-    parse_csv_transactions,
-    process_transactions_batch
+    parse_csv_transactions
 )
 
 __all__ = [
@@ -28,6 +27,5 @@ __all__ = [
     'batch_categorize_transactions',
     # CSV Import
     'detect_csv_format',
-    'parse_csv_transactions',
-    'process_transactions_batch'
+    'parse_csv_transactions'
 ]

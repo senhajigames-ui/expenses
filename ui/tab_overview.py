@@ -18,7 +18,6 @@ from typing import Dict, Tuple, Optional
 from utils.date_helpers import get_date_range_presets
 from database.budget_operations import get_budgets
 from config import CURRENCY_SYMBOL
-from ui.aggrid_table import render_aggrid_table
 
 
 class DashboardMetrics:
@@ -579,5 +578,19 @@ def render_overview_tab(conn, all_transactions: pd.DataFrame):
         'transaction_type': 'Type', 'category': 'Category', 'card': 'Card'
     })
     
-    grid_data = display_df[['ID', 'Date', 'Description', 'Amount', 'Type', 'Category', 'Card']]
-    render_aggrid_table(grid_data, key="dashboard_recent_grid")
+    # Select columns for display (Exclude ID for clean overview)
+    grid_data = display_df[['Date', 'Description', 'Amount', 'Type', 'Category', 'Card']]
+    
+    st.dataframe(
+        grid_data,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Date": st.column_config.TextColumn("📅 Date"),
+            "Description": st.column_config.TextColumn("📝 Description"),
+            "Amount": st.column_config.TextColumn("💰 Amount"),
+            "Type": st.column_config.TextColumn("Type"),
+            "Category": st.column_config.TextColumn("Category"),
+            "Card": st.column_config.TextColumn("💳 Card"),
+        }
+    )

@@ -10,8 +10,8 @@ This module contains helper functions and reusable components:
 import pandas as pd
 
 
-def prepare_aggrid_data(df: pd.DataFrame) -> pd.DataFrame:
-    """Prepare DataFrame for AG Grid display."""
+def prepare_table_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Prepare DataFrame for table display."""
     display_df = df.copy()
     # Ensure date is string formatted YYYY-MM-DD to avoid timestamps
     # Convert to string first to handle both datetime objects and strings safely

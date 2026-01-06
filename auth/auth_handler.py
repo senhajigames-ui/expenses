@@ -146,90 +146,115 @@ def handle_authentication():
         return name, True, username, authenticator
     
     # Show login/register tabs
-    login_tab, register_tab = st.tabs(["🔐 Login (v2 Verified)", "📝 Register"])
     
-    with login_tab:
-        # Show success message if just registered
-        if st.session_state.get('registration_success'):
-            st.success("🎉 Registration successful! Please login with your new credentials.")
-            st.session_state['registration_success'] = False
+    # Use centered container for better UI
+    with render_centered_auth_container():
+        # Clean header
+        render_auth_header("Welcome Back", "Please sign in to continue")
         
-        authenticator.login(location='main')
+        login_tab, register_tab = st.tabs(["🔐 Login", "📝 Register"])
         
-        name = st.session_state.get('name')
-        authentication_status = st.session_state.get('authentication_status')
-        username = st.session_state.get('username')
-        
-        if authentication_status == False:
-            st.error('Username/password is incorrect')
+        with login_tab:
+            # Show success message if just registered (fallback, though auto-login should handle this)
+            if st.session_state.get('registration_success'):
+                st.success("🎉 Registration successful!")
+                st.session_state['registration_success'] = False
             
-        elif authentication_status == None:
-            st.info('👋 Enter your credentials to login, or register for a new account!')
+            authenticator.login(location='main')
             
-        elif authentication_status:
-            # Authenticated successfully
-            user_id = username
-            email = config['credentials']['usernames'].get(username, {}).get('email', '')
-            set_user_session(user_id, email, name)
-            st.rerun()  # Rerun to show dashboard
-    
-    with register_tab:
-        st.markdown("### Create a New Account")
-        st.caption("Register to start tracking your expenses!")
-        
-        with st.form("register_form"):
-            new_username = st.text_input("Username", placeholder="e.g., john_doe")
-            new_email = st.text_input("Email", placeholder="e.g., john@example.com")
-            new_name = st.text_input("Full Name", placeholder="e.g., John Doe")
-            new_password = st.text_input("Password", type="password", placeholder="Min 8 characters")
-            new_password_confirm = st.text_input("Confirm Password", type="password")
+            name = st.session_state.get('name')
+            authentication_status = st.session_state.get('authentication_status')
+            username = st.session_state.get('username')
             
-            submitted = st.form_submit_button("🚀 Create Account", use_container_width=True)
-            
-            if submitted:
-                # Validation
-                errors = []
+            if authentication_status == False:
+                st.error('Username/password is incorrect')
                 
-                if not new_username or len(new_username) < 3:
-                    errors.append("Username must be at least 3 characters")
-                if not new_email or '@' not in new_email:
-                    errors.append("Please enter a valid email")
-                if not new_name:
-                    errors.append("Please enter your name")
-                # Password Strength
-                # Min 8 chars, 1 Upper, 1 Lower, 1 Number, 1 Special
-                # Extended special chars to include - _ + = etc.
-                pw_regex = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>\-_+=]).{8,}$"
-                if not new_password or not re.match(pw_regex, new_password):
-                    errors.append("Password must have 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special char")
-                if new_password != new_password_confirm:
-                    errors.append("Passwords do not match")
+            elif authentication_status == None:
+                st.info('👋 Enter your credentials to login, or register for a new account!')
+                
+            elif authentication_status:
+                # Authenticated successfully
+                user_id = username
+                email = config['credentials']['usernames'].get(username, {}).get('email', '')
+                set_user_session(user_id, email, name)
+                st.rerun()  # Rerun to show dashboard
+        
+        with register_tab:
+            st.markdown("### Create a New Account")
+            st.caption("Register to start tracking your expenses!")
+            
+            with st.form("register_form"):
+                new_username = st.text_input("Username", placeholder="e.g., john_doe")
+                new_email = st.text_input("Email", placeholder="e.g., john@example.com")
+                new_name = st.text_input("Full Name", placeholder="e.g., John Doe")
+                new_password = st.text_input("Password", type="password", placeholder="Min 8 characters")
+                new_password_confirm = st.text_input("Confirm Password", type="password")
+                
+                st.divider()
+                terms = st.checkbox("I agree to the Terms of Service & Privacy Policy")
+                
+                submitted = st.form_submit_button("🚀 Create Account", use_container_width=True)
+                
+                if submitted:
+                    # Validation
+                    errors = []
                     
-                # Check if username exists
-                all_users = config['credentials'].get('usernames', {})
-                supabase_users = get_users_from_supabase()
-                all_users.update(supabase_users)
-                
-                if new_username.lower() in [u.lower() for u in all_users.keys()]:
-                    errors.append("Username already exists")
-                
-                if errors:
-                    for err in errors:
-                        st.error(f"❌ {err}")
-                else:
-                    # Hash password and save
-                    password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+                    if not new_username or len(new_username) < 3:
+                        errors.append("Username must be at least 3 characters")
                     
-                    if save_user_to_supabase(new_username, new_email, new_name, password_hash):
-                        st.balloons()
-                        # Clear the cached users so new user is available
-                        get_users_from_supabase.clear()
-                        # Set flag to show success message on login tab
-                        st.session_state['registration_success'] = True
-                        # Rerun to redirect to login tab (will show by default)
-                        st.rerun()
+                    # Strict Email Regex
+                    email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+                    if not new_email or not re.match(email_regex, new_email):
+                        errors.append("Please enter a valid email address")
+                        
+                    if not new_name:
+                        errors.append("Please enter your name")
+                        
+                    # Password Strength
+                    pw_regex = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>\-_+=]).{8,}$"
+                    if not new_password or not re.match(pw_regex, new_password):
+                        errors.append("Password must have 8+ chars, 1 uppercase, 1 lowercase, 1 number, 1 special char")
+                    
+                    if new_password != new_password_confirm:
+                        errors.append("Passwords do not match")
+                    
+                    if not terms:
+                        errors.append("You must agree to the Terms of Service")
+                        
+                    # Check if username exists
+                    all_users = config['credentials'].get('usernames', {})
+                    supabase_users = get_users_from_supabase()
+                    all_users.update(supabase_users)
+                    
+                    if new_username.lower() in [u.lower() for u in all_users.keys()]:
+                        errors.append("Username already exists")
+                    
+                    if errors:
+                        for err in errors:
+                            st.error(f"❌ {err}")
                     else:
-                        st.error("❌ Failed to create account. Please try again.")
+                        # Hash password and save
+                        password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+                        
+                        with st.spinner("Creating account..."):
+                            if save_user_to_supabase(new_username, new_email, new_name, password_hash):
+                                st.balloons()
+                                # Clear the cached users
+                                get_users_from_supabase.clear()
+                                
+                                # AUTO-LOGIN LOGIC
+                                # Directly set session state to authenticated
+                                st.session_state['authentication_status'] = True
+                                st.session_state['name'] = new_name
+                                st.session_state['username'] = new_username
+                                
+                                # Set user session helper
+                                set_user_session(new_username, new_email, new_name)
+                                
+                                st.success(f"🎉 Welcome, {new_name}! Redirecting...")
+                                st.rerun()
+                            else:
+                                st.error("❌ Failed to create account. Please try again.")
     
     return None, None, None, authenticator
 

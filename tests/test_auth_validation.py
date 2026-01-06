@@ -1,65 +1,67 @@
+
 import unittest
 import re
-
-def validate_email(email):
-    """Validate email format."""
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    return re.match(pattern, email) is not None
-
-def validate_password(password):
-    """
-    Validate password strength:
-    - Min 8 chars
-    - 1 uppercase
-    - 1 number
-    - 1 special char
-    """
-    if len(password) < 8:
-        return False
-    if not re.search(r"[A-Z]", password):
-        return False
-    if not re.search(r"[a-z]", password):
-        return False
-    if not re.search(r"\d", password):
-        return False
-    if not re.search(r"[!@#$%^&*(),.?\":{}|<>\-_+=]", password):
-        return False
-    return True
 
 class TestAuthValidation(unittest.TestCase):
     
     def test_email_validation(self):
-        # Valid
-        self.assertTrue(validate_email("test@example.com"))
-        self.assertTrue(validate_email("user.name@domain.co.uk"))
-        self.assertTrue(validate_email("user+tag@example.com"))
+        """Test explicit email regex pattern used in auth_handler.py"""
+        # Using the exact same regex from the implementation
+        email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         
-        # Invalid
-        self.assertFalse(validate_email("invalid"))
-        self.assertFalse(validate_email("user@"))
-        self.assertFalse(validate_email("user@domain"))
-        self.assertFalse(validate_email("@domain.com"))
+        valid_emails = [
+            "test@example.com",
+            "first.last@domain.co.uk",
+            "user123@sub.domain.org",
+            "a@b.ca"
+        ]
         
-    def test_password_validation(self):
-        # Valid
-        self.assertTrue(validate_password("StrongPass1!"))
-        self.assertTrue(validate_password("Correct-Horse-Battery-Staple-1"))
+        invalid_emails = [
+            "plainaddress",
+            "#@%^%#$@#$@#.com",
+            "@example.com",
+            "Joe Smith <email@example.com>",
+            "email.example.com",
+            "email@example@example.com",
+            "email@example", # Missing TLD
+        ]
         
-        # Invalid
-        self.assertFalse(validate_password("weak")) # Too short
-        self.assertFalse(validate_password("alllowercase1!")) # No upper
-        self.assertFalse(validate_password("ALLUPPERCASE1!")) # No lower (actually regex allows this, let's check)
-        # Wait, my regex doesn't enforce lowercase. Let's fix that in actual implementation or test.
-        # My plan said: "At least one uppercase letter", "At least one number", "At least one special character".
-        # It didn't explicitly say "At least one lowercase", but that's standard. I'll add it.
+        for email in valid_emails:
+            with self.subTest(email=email):
+                self.assertIsNotNone(re.match(email_regex, email))
+                
+        for email in invalid_emails:
+            with self.subTest(email=email):
+                self.assertIsNone(re.match(email_regex, email))
+
+    def test_password_strength(self):
+        """Test password complexity regex."""
+        # Using exact regex from implementation
+        pw_regex = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>\-_+=]).{8,}$"
         
-        self.assertFalse(validate_password("NoNumber!")) # No number
-        self.assertFalse(validate_password("NoSpecialChar1")) # No special
+        strong_passwords = [
+            "Password123!",
+            "Complex-Pass-99",
+            "A1@bcdef",
+            "My#1Password"
+        ]
         
-    def test_password_lowercase_check(self):
-        # Let's see if I should enforce lowercase. Yes, standard.
-        # I'll update the validate function in the test to match what I WILL implement.
-        pass
+        weak_passwords = [
+            "password123", # No upper, no special
+            "PASSWORD123", # No lower, no special
+            "Pass123", # Too short
+            "Password!", # No number
+            "Password123", # No special
+            "short1!", # Too short
+        ]
+        
+        for pw in strong_passwords:
+            with self.subTest(pw=pw):
+                self.assertIsNotNone(re.match(pw_regex, pw))
+                
+        for pw in weak_passwords:
+            with self.subTest(pw=pw):
+                self.assertIsNone(re.match(pw_regex, pw))
 
 if __name__ == '__main__':
     unittest.main()

@@ -31,16 +31,38 @@ def verify_rls():
     
     from database.supabase_client import get_supabase_client
     
+    import base64
+    import json
+    
     try:
         supabase = get_supabase_client()
         
+        # 1. Check Key Role (Anon vs Service)
+        key = st.secrets["supabase"]["key"]
+        try:
+            # Simple JWT decode (middle part)
+            payload_segment = key.split('.')[1]
+            # Add padding if needed
+            padded = payload_segment + '=' * (4 - len(payload_segment) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(padded))
+            role = payload.get('role', 'unknown')
+            print(f"INFO: API Key Role is '{role}'")
+            
+            if role == 'service_role':
+                print("WARNING: You are using the SERVICE_ROLE key. This bypasses RLS!")
+                print("       This test cannot verify RLS enforcement because existing as Admin.")
+                return
+        except Exception as e:
+            print(f"INFO: Could not decode key role: {e}")
+        
+        # 2. Probe RLS
         print("Attempting to fetch transactions without user_id filter (Anon access)...")
         # Try to get ANY row
         response = supabase.table('transactions').select("*").limit(1).execute()
         
         if response.data and len(response.data) > 0:
             print("CRITICAL: RLS IS LIKELY DISABLED! Data returned for unauthenticated request.")
-            print(f"Data sample: {response.data[0].keys()}")
+            print(f"Data sample keys: {list(response.data[0].keys())}")
         else:
             print("SUCCESS: No data returned. RLS appears to be preventing unauthorized access.")
             

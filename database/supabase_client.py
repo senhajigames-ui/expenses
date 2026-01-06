@@ -23,7 +23,9 @@ def get_supabase_client() -> Client:
     """
     try:
         url = st.secrets["supabase"]["url"]
-        key = st.secrets["supabase"]["key"]
+        
+        # Prefer Service Role Key for backend operations
+        key = st.secrets["supabase"].get("service_role_key", st.secrets["supabase"]["key"])
         
         if not url or not key:
             raise ValueError("Supabase credentials not configured")

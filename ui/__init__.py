@@ -18,9 +18,6 @@ from .tab_overview import render_overview_tab
 from .tab_analysis import render_analysis_tab
 from .tab_manage import render_manage_tab
 
-# Grid component
-from .aggrid_table import render_aggrid_table
-
 # Manage tab components
 from .manage import TransactionFilter, TransactionUpdater
 
@@ -32,7 +29,6 @@ __all__ = [
     'render_analysis_tab',
     'render_manage_tab',
     # Components
-    'render_aggrid_table',
     'TransactionFilter',
     'TransactionUpdater'
 ]
