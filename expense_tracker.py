@@ -38,9 +38,10 @@ def initialize_app() -> None:
     )
 
 
+@st.cache_data(ttl=300)
 def load_transactions(load_all: bool = False) -> pd.DataFrame:
     """
-    Load transactions from Supabase.
+    Load transactions from Supabase (Cached).
     Args:
         load_all: If True, load entire history. If False, load last 12 months.
     """

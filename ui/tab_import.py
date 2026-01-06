@@ -248,6 +248,10 @@ class MultiFileImporter:
             if file_imported > 0:
                 record_file_import(file.name, file_hash, file_imported)
         
+        # Clear transaction cache to show new data immediately
+        from expense_tracker import load_transactions
+        load_transactions.clear()
+        
         return {
             'imported': imported,
             'skipped': skipped,

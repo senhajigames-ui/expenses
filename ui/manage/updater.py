@@ -181,6 +181,10 @@ class TransactionUpdater:
             if not success:
                 return {'success': False}
             
+            # Clear cache to show updates immediately
+            from expense_tracker import load_transactions
+            load_transactions.clear()
+            
             # Find similar transactions and create rule if category OR type changed
             similar_transactions = []
             merchant = None
@@ -247,6 +251,10 @@ class TransactionUpdater:
             if not success:
                 st.error(f"Transaction {txn_id} not found or could not be deleted")
                 return {'success': False}
+            
+            # Clear cache to show updates immediately
+            from expense_tracker import load_transactions
+            load_transactions.clear()
             
             return {'success': True}
             
