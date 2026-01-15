@@ -1,10 +1,9 @@
-# Force Rebuild 1
-streamlit
-pandas
-plotly
-python-dateutil
-streamlit-authenticator
-PyYAML
-supabase
-bcrypt
-toml
+streamlit==1.50.0
+pandas==2.3.3
+plotly==6.5.0
+python-dateutil==2.9.0.post0
+streamlit-authenticator==0.4.2
+PyYAML==6.0.3
+supabase==2.27.0
+bcrypt==5.0.0
+toml==0.10.2

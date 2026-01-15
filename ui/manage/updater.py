@@ -284,11 +284,14 @@ class TransactionUpdater:
         new_type: str
     ) -> List[Tuple]:
         """Find similar transactions using Supabase."""
-        from database.transaction_operations import search_transactions
+        # Import the module instead of the function so tests can patch
+        # 'database.transaction_operations.search_transactions' and have
+        # this method respect that patch.
+        from database import transaction_operations as txn_ops
         
         # Get candidates from Supabase using server-side search
         # This replaces loading the entire database into memory!
-        candidates = search_transactions(merchant, exclude_id=exclude_id)
+        candidates = txn_ops.search_transactions(merchant, exclude_id=exclude_id)
         
         if not candidates:
             return []

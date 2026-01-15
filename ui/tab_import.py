@@ -82,6 +82,11 @@ class MultiFileImporter:
                 f"🔍 Checking {file.name}... ({idx + 1}/{file_count})"
             )
             
+            # Check file size (200MB limit)
+            if file.size > 200 * 1024 * 1024:
+                st.error(f"❌ **{file.name}**: File too large (>200MB). Skipping.")
+                continue
+
             # Calculate file hash
             file_content = file.read()
             file_hash = calculate_file_hash(file_content)

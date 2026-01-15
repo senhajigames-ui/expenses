@@ -49,7 +49,7 @@ def load_auth_config():
         'credentials': {'usernames': {}},
         'cookie': {
             'name': 'expense_tracker_session_safe',
-            'key': 'some_random_signature_key_fallback',  # Ideally this should be in secrets
+            'key': st.secrets.get('cookie', {}).get('key', 'random_key_' + str(hash(datetime.now()))), # Dynamic fallback
             'expiry_days': 30
         },
         'pre-authorized': {'emails': []}

@@ -38,7 +38,6 @@ def initialize_app() -> None:
     )
 
 
-@st.cache_data(ttl=300)
 def load_transactions(load_all: bool = False) -> pd.DataFrame:
     """
     Load transactions from Supabase (Cached).
@@ -69,6 +68,16 @@ def load_transactions(load_all: bool = False) -> pd.DataFrame:
     except Exception as e:
         st.error(f"Error loading transactions: {e}")
         return pd.DataFrame()
+
+
+# Provide a no-op clear() method for compatibility with callers that expect
+# a cached function (e.g. tests and import logic call load_transactions.clear()).
+def _load_transactions_clear():
+    """Placeholder cache clear for load_transactions (no-op since not cached)."""
+    return None
+
+
+load_transactions.clear = _load_transactions_clear
 
 
 def render_active_tab(all_transactions: pd.DataFrame):

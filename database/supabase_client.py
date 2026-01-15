@@ -11,6 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+@st.cache_resource
 def get_supabase_client() -> Client:
     """
     Get Supabase client from Streamlit secrets.

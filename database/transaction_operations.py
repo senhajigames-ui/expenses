@@ -13,6 +13,7 @@ from database.supabase_client import get_supabase_client, get_user_id
 logger = logging.getLogger(__name__)
 
 
+
 def add_transaction(
     date: str,
     description: str,
