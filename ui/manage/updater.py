@@ -44,6 +44,11 @@ class TransactionUpdater:
             grid_key: Unique key for tracking changes
         """
         try:
+            # Root fix: Prevent "truth value of DataFrame is ambiguous" crash
+            if isinstance(editor_state, pd.DataFrame):
+                st.error("Programmer Error: Passed DataFrame instead of session_state dict to processing")
+                return
+
             if not editor_state or 'edited_rows' not in editor_state:
                 return
 

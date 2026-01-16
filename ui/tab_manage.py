@@ -147,7 +147,12 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
     )
     
     # Process changes
-    updater.process_data_editor_changes(aggrid_df, display_df, editor_state, grid_key="main")
+    updater.process_data_editor_changes(
+        aggrid_df, 
+        display_df, 
+        st.session_state["main_editor"] if "main_editor" in st.session_state else None, 
+        grid_key="main"
+    )
     
     # Render action buttons
     st.divider()
@@ -165,7 +170,7 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
             transfer_display = prepare_table_data(transfer_df).reset_index(drop=True)
             
             # Render transfers editor
-            transfer_editor_state = st.data_editor(
+            transfer_editor_df = st.data_editor(
                 transfer_display,
                 column_config=column_config,
                 hide_index=True,
@@ -175,7 +180,12 @@ def render_manage_tab(conn, all_transactions: pd.DataFrame):
             )
             
             # Process changes
-            updater.process_data_editor_changes(transfer_df, transfer_display, transfer_editor_state, grid_key="transfer")
+            updater.process_data_editor_changes(
+                transfer_df, 
+                transfer_display, 
+                st.session_state["transfer_editor"] if "transfer_editor" in st.session_state else None, 
+                grid_key="transfer"
+            )
         else:
             st.info("No transfer transactions found")
     
