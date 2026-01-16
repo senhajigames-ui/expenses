@@ -87,17 +87,23 @@ def save_user_to_supabase(username: str, email: str, name: str, password_hash: s
         if not supabase:
             return False
         
-        data = {
+        # Use RPC for secure registration (bypasses RLS safety warnings)
+        params = {
             'username': username,
             'email': email,
             'name': name,
             'password_hash': password_hash
         }
         
-        supabase.table('app_users').insert(data).execute()
-        return True
+        response = supabase.rpc('register_user', params).execute()
+        
+        # Parse boolean response
+        if response.data is True:
+            return True
+        return False
+        
     except Exception as e:
-        logger.error(f"Failed to save user: {e}")
+        logger.error(f"Failed to save user via RPC: {e}")
         return False
 
 
