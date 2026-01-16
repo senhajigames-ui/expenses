@@ -172,7 +172,7 @@ def handle_authentication():
             authentication_status = st.session_state.get('authentication_status')
             username = st.session_state.get('username')
             
-            if authentication_status == False:
+            if authentication_status is False:
                 st.error('Username/password is incorrect')
                 
             elif authentication_status == None:

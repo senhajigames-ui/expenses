@@ -43,7 +43,7 @@ def load_secrets():
         sys.exit(1)
 
 secrets = load_secrets()
-# print(f"DEBUG: Loaded secrets keys: {secrets.keys()}")
+
 
 # 2. Mock Streamlit
 mock_st = MagicMock()

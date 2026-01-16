@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 300
 
 
+@st.cache_data(ttl=CACHE_TTL)
 def get_budgets(_conn = None) -> Dict[str, float]:
     """
     Get all budget settings from Supabase.
@@ -72,6 +73,7 @@ def save_budget(conn, category: str, amount: float) -> bool:
         return False
 
 
+@st.cache_data(ttl=CACHE_TTL)
 def load_merchant_rules(_conn = None) -> Dict[str, str]:
     """
     Load merchant categorization rules from Supabase.

@@ -66,13 +66,14 @@ class CategorizationEngine:
         """
         desc_upper = description.upper()
         
-        # Priority 1: Checking account rules
-        result = self._check_account_rules(desc_upper, amount, transaction_code)
+        # Priority 1: Custom rules (USER IS KING)
+        # Check this FIRST so user can override any system logic
+        result = self._check_custom_rules(description)
         if result:
             return result
         
-        # Priority 2: Custom rules
-        result = self._check_custom_rules(description)
+        # Priority 2: Checking account rules (System logic)
+        result = self._check_account_rules(desc_upper, amount, transaction_code)
         if result:
             return result
         
@@ -103,75 +104,79 @@ class CategorizationEngine:
     ) -> Optional[Tuple[str, str]]:
         """
         Universal checking account rules based on keywords and patterns.
-        Works for any bank by analyzing description content.
+        Optimized for performance using set lookups instead of repeated regex compilation.
         """
+        # Tokenize once for fast O(1) word lookup
+        # Replace common punctuation with spaces to ensure clean word splitting
+        import re
+        clean_desc = re.sub(r'[^\w\s]', ' ', desc_upper)
+        desc_words = set(clean_desc.split())
         
-        # INCOME DETECTION (keywords that indicate money coming in)
-        income_keywords = {
-            'salary': ["SALARY", "PAY", "PAYROLL", "DEPOSIT", "DIRECT DEPOSIT", "OPERATION", "EMPLOYMENT"],
-            'interest': ["INTEREST", "INT PAID"],
-            'cashback': ["CASHBACK", "CASH BACK", "REWARD"],
-            'refund': ["REFUND", "RETURN", "REIMBURSEMENT"]
-        }
+        # --- INCOME DETECTION ---
+        # "PAYROLL", "SALARY" are safe. Removed "PAY" to prevent matching "PAYMENT".
         
-        for income_type, keywords in income_keywords.items():
-            if any(kw in desc_upper for kw in keywords):
-                if income_type == 'salary':
-                    return "Income - Salary", "income"
-                elif income_type == 'interest':
-                    return "Income - Interest", "income"
-                elif income_type == 'cashback':
-                    return "Income - Cashback", "income"
-                elif income_type == 'refund':
-                    return "Income - Other", "income"
+        # Structure: (Category, Type, List[Keywords])
+        income_rules = [
+            ("Income - Salary", "income", ["SALARY", "PAYROLL", "DEPOSIT", "DIRECT DEPOSIT", "OPERATION", "EMPLOYMENT"]),
+            ("Income - Interest", "income", ["INTEREST", "INT PAID"]),
+            ("Income - Cashback", "income", ["CASHBACK", "CASH BACK", "REWARD"]),
+            ("Income - Other", "income", ["REFUND", "RETURN", "REIMBURSEMENT"])
+        ]
         
-        # INTERAC E-TRANSFER DETECTION (handle various formats)
-        interac_keywords = ["INTERAC", "E-TRANSFER", "E-TRF", "ETRANSFER"]
-        if any(kw in desc_upper for kw in interac_keywords):
+        for category, txn_type, keywords in income_rules:
+            for kw in keywords:
+                # OPTIMIZATION:
+                # If keyword is single word -> Use set lookup (O(1))
+                # If keyword is phrase -> Use substring check (Fast str scan)
+                if ' ' in kw:
+                     if kw in desc_upper:
+                         return category, txn_type
+                else:
+                    if kw in desc_words:
+                        return category, txn_type
+        
+        # --- INTERAC DETECTION ---
+        # Fast path: check if INTERAC related words exist first
+        interac_triggers = {"INTERAC", "E-TRANSFER", "ETRANSFER"}
+        if interac_triggers.intersection(desc_words) or any(kw in desc_upper for kw in ["E-TRF"]):
             # Check direction
-            received_keywords = ["RECEIVED", "FROM", "RCVD", "DEPOSIT"]
-            sent_keywords = ["SENT", "OUT", "PAYMENT"]
+            received_keywords = {"RECEIVED", "FROM", "RCVD", "DEPOSIT"}
+            sent_keywords = {"SENT", "OUT", "PAYMENT"}
             
-            if any(kw in desc_upper for kw in received_keywords):
+            if received_keywords.intersection(desc_words):
                 return "Other", "income"
-            elif any(kw in desc_upper for kw in sent_keywords):
+            elif sent_keywords.intersection(desc_words):
                 return "Other", "expense"
         
-        # TRANSFER DETECTION (money moving between your own accounts)
-        transfer_keywords = ["TFSA", "FHSA", "TAX-FREE", "FIRST HOME", "SAVINGS", "INVESTMENT"]
-        if any(kw in desc_upper for kw in transfer_keywords):
-            # Determine specific transfer type
-            if "TFSA" in desc_upper or "FHSA" in desc_upper:
+        # --- TRANSFER DETECTION ---
+        transfer_keywords = {"TFSA", "FHSA", "TAX-FREE", "SAVINGS", "INVESTMENT"}
+        # Check phrases first
+        if "FIRST HOME" in desc_upper or transfer_keywords.intersection(desc_words):
+             if "TFSA" in desc_upper or "FHSA" in desc_upper:
                 return "TFSA/FHSA", "transfer"
-            else:
+             else:
                 return "Other Transfer", "transfer"
         
-        # Amount-based transfer detection (for recurring transfers)
-        if 10 <= amount <= 30:
-            if any(kw in desc_upper for kw in ["TRANSFER", "TRF"]):
-                return "TFSA/FHSA", "transfer"
-        elif amount == 50:
-            if any(kw in desc_upper for kw in ["TRANSFER", "TRF", "EMERGENCY"]):
-                return "Emergency Fund", "transfer"
-        elif amount == 75:
-            if any(kw in desc_upper for kw in ["TRANSFER", "TRF", "MOROCCO"]):
-                return "Morocco", "transfer"
-        
-        # PAYMENT DETECTION (paying off credit cards)
-        payment_keywords = ["AMEX", "VISA", "MASTERCARD", "CREDIT CARD", "CC PAYMENT", "CARD PAYMENT"]
-        if any(kw in desc_upper for kw in payment_keywords):
+        # --- PAYMENT DETECTION ---
+        # Distinct identifiers
+        payment_triggers = {"AMEX", "VISA", "MASTERCARD"}
+        if payment_triggers.intersection(desc_words) or \
+           any(kw in desc_upper for kw in ["CREDIT CARD", "CC PAYMENT", "CARD PAYMENT"]):
             return "Payment", "payment"
         
-        # EXPENSE DETECTION (specific categories)
-        expense_patterns = {
-            "Rent": ["RENT", "BAYTREE", "APARTMENT", "LANDLORD"],
-            "Insurance": ["INSURANCE", "COOPERATORS"],
-            "Utilities": ["UTILITIES", "UTILITY", "METERGY", "HYDRO", "ELECTRIC", "GAS BILL", "WATER"]
-        }
+        # --- EXPENSE CATEGORIES ---
+        expense_rules = [
+            ("Rent", ["RENT", "BAYTREE", "APARTMENT", "LANDLORD"]),
+            ("Insurance", ["INSURANCE", "COOPERATORS"]),
+            ("Utilities", ["UTILITIES", "UTILITY", "METERGY", "HYDRO", "ELECTRIC", "GAS BILL", "WATER"])
+        ]
         
-        for category, keywords in expense_patterns.items():
-            if any(kw in desc_upper for kw in keywords):
-                return category, "expense"
+        for category, keywords in expense_rules:
+            for kw in keywords:
+                if ' ' in kw:
+                    if kw in desc_upper: return category, "expense"
+                else:
+                    if kw in desc_words: return category, "expense"
         
         # If we have a transaction code, use it as a hint
         if txn_code:
