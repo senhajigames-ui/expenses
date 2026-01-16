@@ -9,28 +9,28 @@ DROP POLICY IF EXISTS "Users can only see their own transactions" ON public.tran
 CREATE POLICY "Users can only see their own transactions"
 ON public.transactions
 FOR ALL
-USING (user_id = (select auth.uid()::text));
+USING (user_id = (select auth.uid())::text);
 
 -- Budgets
 DROP POLICY IF EXISTS "Users can only see their own budgets" ON public.budgets;
 CREATE POLICY "Users can only see their own budgets"
 ON public.budgets
 FOR ALL
-USING (user_id = (select auth.uid()::text));
+USING (user_id = (select auth.uid())::text);
 
 -- Merchant Rules
 DROP POLICY IF EXISTS "Users can only see their own rules" ON public.merchant_rules;
 CREATE POLICY "Users can only see their own rules"
 ON public.merchant_rules
 FOR ALL
-USING (user_id = (select auth.uid()::text));
+USING (user_id = (select auth.uid())::text);
 
 -- Import History
 DROP POLICY IF EXISTS "Users can only see their own import history" ON public.import_history;
 CREATE POLICY "Users can only see their own import history"
 ON public.import_history
 FOR ALL
-USING (user_id = (select auth.uid()::text));
+USING (user_id = (select auth.uid())::text);
 
 
 -- 2. Fix "Duplicate Index" (duplicate_index)
