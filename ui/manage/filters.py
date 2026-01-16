@@ -224,7 +224,7 @@ class TransactionFilter:
         search = st.session_state.get('manage_search', '')
         if search:
             filtered = filtered[
-                filtered['description'].str.contains(search, case=False, na=False)
+                filtered['description'].str.contains(search, case=False, na=False, regex=False)
             ]
         
         return filtered
